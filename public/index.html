@@ -1,0 +1,26 @@
+<html lang="en">
+
+<head>
+  <title>Express</title>
+  <link rel="stylesheet" href="/stylesheets/style.css">
+</head>
+
+<body>
+  <h1>Scream Everyware</h1>
+  <p>Welcome to Express</p>
+  <button type="button" id="start">Start</button>
+  <dl id="commands">
+    <dt>Init 1 - Returns one command response? 0x47 could be "get param"?</dt>
+    <dd>47 73</dd>
+    <dt>Init 2 - Starts streaming data back</dt>
+    <dd>45 2B</dd>
+    <dt>Init 3 - Returns a version string?</dt>
+    <dd>47 30</dd>
+  </dl>
+  <input type="text" id="command" value="" />
+  <button type="button" id="send">Send</button>
+  <dl id="variables"></dl>
+  <script src="/javascripts/script.js"></script>
+</body>
+
+</html>
