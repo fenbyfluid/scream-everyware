@@ -10,12 +10,26 @@
   <p>Welcome to Express</p>
   <button type="button" id="start">Start</button>
   <dl id="commands">
-    <dt>Init 1 - Returns one command response? 0x47 could be "get param"?</dt>
+    <dt>Init 1 ('Gs') - Get firmware version</dt>
     <dd>47 73</dd>
-    <dt>Init 2 - Starts streaming data back</dt>
+    <dt>Init 2 ('E+') - Starts streaming data back</dt>
     <dd>45 2B</dd>
-    <dt>Init 3 - Returns a version string?</dt>
+    <dt>Init 3 ('G0') - Get info string ???</dt>
     <dd>47 30</dd>
+    <dt>Quit ('E-') - Stops streaming data</dt>
+    <dd>45 2D</dd>
+    <dt>Set Channels ('C', 0x00) - All off</dt>
+    <dd>43 00</dd>
+    <dt>Set Mode ('P', 0x00) - Torment</dt>
+    <dd>50 00</dd>
+    <dt>Manual Trigger ('T', 0x0A) - 1.0s, param is number of 0.1s increments</dt>
+    <dd>54 0A</dd>
+    <dt>Set Buzzer Mode ('Z', 0x01)</dt>
+    <dd>5A 01</dd>
+    <dt>Set Short Switch Mode ('1', 0x0E) - Torment (LV), 0x32 ('2') Normal, 0x33 ('3') Medium, 0x34 ('4') Long</dt>
+    <dd>31 0E</dd>
+    <dt>Query Output Level ('Gv')</dt>
+    <dd>47 76</dd>
   </dl>
   <input type="text" id="command" value="" />
   <button type="button" id="send">Send</button>
