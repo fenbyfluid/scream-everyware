@@ -1,40 +1,18 @@
+<!DOCTYPE html>
+<!--suppress HtmlUnknownTarget -->
 <html lang="en">
-
-<head>
-  <title>Express</title>
-  <link rel="stylesheet" href="/stylesheets/style.css">
-</head>
-
-<body>
-  <h1>Scream Everyware</h1>
-  <p>Welcome to Express</p>
-  <button type="button" id="start">Start</button>
-  <dl id="commands">
-    <dt>Init 1 ('Gs') - Get firmware version</dt>
-    <dd>47 73</dd>
-    <dt>Init 2 ('E+') - Starts streaming data back</dt>
-    <dd>45 2B</dd>
-    <dt>Init 3 ('G0') - Get info string ???</dt>
-    <dd>47 30</dd>
-    <dt>Quit ('E-') - Stops streaming data</dt>
-    <dd>45 2D</dd>
-    <dt>Set Channels ('C', 0x00) - All off</dt>
-    <dd>43 00</dd>
-    <dt>Set Mode ('P', 0x00) - Torment</dt>
-    <dd>50 00</dd>
-    <dt>Manual Trigger ('T', 0x0A) - 1.0s, param is number of 0.1s increments</dt>
-    <dd>54 0A</dd>
-    <dt>Set Buzzer Mode ('Z', 0x01)</dt>
-    <dd>5A 01</dd>
-    <dt>Set Short Switch Mode ('1', 0x0E) - Torment (LV), 0x32 ('2') Normal, 0x33 ('3') Medium, 0x34 ('4') Long</dt>
-    <dd>31 0E</dd>
-    <dt>Query Output Level ('Gv')</dt>
-    <dd>47 76</dd>
-  </dl>
-  <input type="text" id="command" value="" />
-  <button type="button" id="send">Send</button>
-  <dl id="variables"></dl>
-  <script src="/javascripts/script.js"></script>
-</body>
-
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="description" content="Web site created using create-react-app" />
+        <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        <title>React App</title>
+    </head>
+    <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div id="root"></div>
+    </body>
 </html>
