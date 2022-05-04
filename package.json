@@ -9,7 +9,7 @@
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.1.1",
     "@testing-library/user-event": "^13.5.0",
-    "@types/dom-serial": "^1.0.2",
+    "@types/w3c-web-serial": "^1.0.2",
     "@types/jest": "^27.4.1",
     "@types/node": "^16.11.32",
     "@types/react": "^18.0.8",
@@ -34,7 +34,13 @@
       "react-app",
       "react-app/jest",
       "plugin:@blueprintjs/recommended"
-    ]
+    ],
+    "rules": {
+      "quotes": [
+        "error",
+        "single"
+      ]
+    }
   },
   "browserslist": {
     "production": [
