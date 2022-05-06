@@ -218,7 +218,7 @@ export class Device {
 
   private async getVariable(variable: number, fetchMode: FetchMode = FetchMode.Default): Promise<number> {
     const value = this.variableValues.get(variable);
-    if (this.streaming && fetchMode !== FetchMode.ForceLoad && value !== undefined) {
+    if (this.streaming && fetchMode === FetchMode.Default && value !== undefined) {
       return value;
     }
 

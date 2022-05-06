@@ -2,15 +2,25 @@ import { CommunicationsInterface, VariableUpdate } from './X1';
 
 export class WebSerialCommunicationsInterface implements CommunicationsInterface {
   private port: SerialPort | null = null;
+  private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   async open(port: SerialPort): Promise<void> {
     if (this.port !== null) {
       throw new Error('WebSerialCommunicationsInterface already open');
     }
 
-    await port.open({
-      baudRate: 115200,
-    });
+    // Retry a number of times as the bluetooth connection can take a while.
+    for (let i = 0; i < 10; ++i) {
+      try {
+        await port.open({
+          baudRate: 115200,
+        });
+
+        break;
+      } catch (e) {
+        console.log(e);
+      }
+    }
 
     this.port = port;
   }
@@ -18,6 +28,10 @@ export class WebSerialCommunicationsInterface implements CommunicationsInterface
   async close(): Promise<void> {
     if (this.port === null) {
       throw new Error('WebSerialCommunicationsInterface not open');
+    }
+
+    if (this.reader) {
+      await this.reader.cancel();
     }
 
     await this.port.close();
@@ -52,10 +66,10 @@ export class WebSerialCommunicationsInterface implements CommunicationsInterface
     }
 
     const buffer = [];
-    const reader = this.port.readable.getReader();
+    this.reader = this.port.readable.getReader();
 
     while (true) {
-      const { value, done } = await reader.read();
+      const { value, done } = await this.reader.read();
       if (done) {
         break;
       }
@@ -85,6 +99,7 @@ export class WebSerialCommunicationsInterface implements CommunicationsInterface
       }
     }
 
-    reader.releaseLock();
+    this.reader.releaseLock();
+    this.reader = null;
   }
 }
