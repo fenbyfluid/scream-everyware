@@ -63,7 +63,7 @@ enum FetchMode {
 export class Device {
   private interface: CommunicationsInterface;
   private streaming: boolean = false;
-  private pendingVariables: Map<number, { promise: Promise<number>, resolve: (value: number) => void }> = new Map();
+  private pendingVariables: Map<number, { promise: Promise<number>, resolve: (value: number) => void, reject: (reason: Error) => void }> = new Map();
   private variableValues: Map<number, number> = new Map();
 
   constructor(communicationsInterface: CommunicationsInterface) {
@@ -214,6 +214,11 @@ export class Device {
         pending.resolve(value);
       }
     }
+
+    for (const [variable, pending] of this.pendingVariables) {
+      this.pendingVariables.delete(variable);
+      pending.reject(new Error('connection closed'));
+    }
   }
 
   private async getVariable(variable: number, fetchMode: FetchMode = FetchMode.Default): Promise<number> {
@@ -228,11 +233,13 @@ export class Device {
     }
 
     let resolve: ((value: number) => void) | null = null;
-    const promise = new Promise<number>(resolveFn => {
+    let reject: ((reason: Error) => void) | null = null;
+    const promise = new Promise<number>((resolveFn, rejectFn) => {
       resolve = resolveFn;
+      reject = rejectFn;
     });
 
-    this.pendingVariables.set(variable, { promise, resolve: resolve! });
+    this.pendingVariables.set(variable, { promise, resolve: resolve!, reject: reject! });
 
     if (!this.streaming && fetchMode === FetchMode.WaitForChange) {
       throw new Error('WaitForChange used while not streaming');
