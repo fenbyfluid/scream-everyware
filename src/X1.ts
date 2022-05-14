@@ -1,3 +1,5 @@
+import { Deferred } from './Deferred';
+
 export interface VariableUpdate {
   readonly variable: number;
   readonly value: number;
@@ -6,6 +8,37 @@ export interface VariableUpdate {
 export interface CommunicationsInterface {
   sendCommand(command: number, argument: number): Promise<void>;
   receiveMessages(): AsyncGenerator<VariableUpdate | string, void, void>;
+}
+
+export enum PulseWidthSwitch {
+  Short = 0x01,
+  Normal = 0x00,
+  Medium = 0x03,
+  Long = 0x02,
+}
+
+export enum TriggerModeSwitch {
+  Continuous = 0x01,
+  Pulse = 0x00,
+  Manual = 0x03,
+  Audio = 0x02,
+}
+
+export enum UnitMode {
+  Normal = 0x00,
+  Extreme = 0x01,
+}
+
+export enum BuzzerMode {
+  Always = 0x00,
+  WhenOutput = 0x01,
+}
+
+export enum Channel {
+  One = 1 << 0,
+  Two = 1 << 1,
+  Three = 1 << 2,
+  Four = 1 << 3,
 }
 
 export enum Mode {
@@ -31,30 +64,7 @@ export enum Mode {
   ExtremeBitchTraining,
 }
 
-export const ModeNames: { [Property in Mode]: string; } = {
-  [Mode.Torment]: 'Torment',
-  [Mode.SmoothSuffering]: 'Smooth Suffering',
-  [Mode.BitchTraining]: 'Bitch Training',
-  [Mode.TurboThruster]: 'Turbo Thruster',
-  [Mode.Random]: 'Random',
-  [Mode.RandomBitch]: 'Random Bitch',
-  [Mode.Purgatory]: 'Purgatory',
-  [Mode.PurgatoryChaos]: 'Purgatory Chaos',
-  [Mode.PersistentPain]: 'Persistent Pain',
-  [Mode.Pulse]: 'Pulse',
-  [Mode.RampPulse]: 'Ramp Pulse',
-  [Mode.RampRepeat]: 'Ramp Repeat',
-  [Mode.RampIntensity]: 'Ramp Intensity',
-  [Mode.AudioAttack]: 'Audio Attack',
-  [Mode.TormentLowVoltage]: 'Torment (LV)',
-  [Mode.PowerWavesLowVoltage]: 'Power Waves (LV)',
-  [Mode.SpeedWaves]: 'Speed Waves',
-  [Mode.DemonPlay]: 'Demon Play',
-  [Mode.ExtremeTorment]: 'Extreme Torment',
-  [Mode.ExtremeBitchTraining]: 'Extreme Bitch Training',
-};
-
-enum FetchMode {
+export enum FetchMode {
   Default,
   ForceLoad,
   WaitForChange,
@@ -63,7 +73,7 @@ enum FetchMode {
 export class Device {
   private interface: CommunicationsInterface;
   private streaming: boolean = false;
-  private pendingVariables: Map<number, { promise: Promise<number>, resolve: (value: number) => void, reject: (reason: Error) => void }> = new Map();
+  private pendingVariables: Map<number, Deferred<number>> = new Map();
   private variableValues: Map<number, number> = new Map();
 
   constructor(communicationsInterface: CommunicationsInterface) {
@@ -86,46 +96,56 @@ export class Device {
     const value = Math.round(time * 10);
 
     if (value < 0x00 || value > 0xFF) {
-      throw new Error(`trigger time ${time} (${value}) out of range`)
+      throw new Error(`trigger time ${time} (${value}) out of range`);
     }
 
     await this.interface.sendCommand('T'.charCodeAt(0), value);
   }
 
-  async getShortSwitchMode(): Promise<Mode> {
-    return await this.getVariable('1'.charCodeAt(0));
+  async getSwitchMode(switchPosition: PulseWidthSwitch, fetchMode: FetchMode = FetchMode.Default): Promise<Mode> {
+    let variable;
+    switch (switchPosition) {
+      case PulseWidthSwitch.Short:
+        variable = '1'.charCodeAt(0);
+        break;
+      case PulseWidthSwitch.Normal:
+        variable = '2'.charCodeAt(0);
+        break;
+      case PulseWidthSwitch.Medium:
+        variable = '3'.charCodeAt(0);
+        break;
+      case PulseWidthSwitch.Long:
+        variable = '4'.charCodeAt(0);
+        break;
+    }
+
+    return await this.getVariable(variable, fetchMode);
   }
 
-  async setShortSwitchMode(mode: Mode): Promise<void> {
-    await this.interface.sendCommand('1'.charCodeAt(0), mode);
+  async setSwitchMode(switchPosition: PulseWidthSwitch, mode: Mode): Promise<void> {
+    let variable;
+    switch (switchPosition) {
+      case PulseWidthSwitch.Short:
+        variable = '1'.charCodeAt(0);
+        break;
+      case PulseWidthSwitch.Normal:
+        variable = '2'.charCodeAt(0);
+        break;
+      case PulseWidthSwitch.Medium:
+        variable = '3'.charCodeAt(0);
+        break;
+      case PulseWidthSwitch.Long:
+        variable = '4'.charCodeAt(0);
+        break;
+    }
+
+    await this.interface.sendCommand(variable, mode);
+
+    // The set commands for these don't mirror back the new value.
+    this.processVariableUpdate(variable, mode);
   }
 
-  async getNormalSwitchMode(): Promise<Mode> {
-    return await this.getVariable('2'.charCodeAt(0));
-  }
-
-  async setNormalSwitchMode(mode: Mode): Promise<void> {
-    await this.interface.sendCommand('2'.charCodeAt(0), mode);
-  }
-
-  async getMediumSwitchMode(): Promise<Mode> {
-    return await this.getVariable('3'.charCodeAt(0));
-  }
-
-  async setMediumSwitchMode(mode: Mode): Promise<void> {
-    await this.interface.sendCommand('3'.charCodeAt(0), mode);
-  }
-
-  async getLongSwitchMode(): Promise<Mode> {
-    return await this.getVariable('4'.charCodeAt(0));
-  }
-
-  async setLongSwitchMode(mode: Mode): Promise<void> {
-    await this.interface.sendCommand('4'.charCodeAt(0), mode);
-  }
-
-  async getEnabledChannels(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getEnabledChannels(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
     return await this.getVariable('c'.charCodeAt(0), fetchMode);
   }
 
@@ -133,28 +153,23 @@ export class Device {
     await this.interface.sendCommand('C'.charCodeAt(0), channelMask);
   }
 
-  async getCountDownTimeRemaining(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getCountDownTimeRemaining(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
     return await this.getVariable('d'.charCodeAt(0), fetchMode);
   }
 
-  async getPulseRateKnobValue(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getPulseRateKnobValue(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
     return await this.getVariable('f'.charCodeAt(0), fetchMode);
   }
 
-  async getModeInfo(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getModeInfo(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
     return await this.getVariable('i'.charCodeAt(0), fetchMode);
   }
 
-  async getInputVoltage(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
-    return await this.getVariable('l'.charCodeAt(0), fetchMode);
+  async getInputVoltage(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
+    return (await this.getVariable('l'.charCodeAt(0), fetchMode)) / 10;
   }
 
-  async getCurrentMode(waitForChange: boolean = false): Promise<Mode> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getCurrentMode(fetchMode: FetchMode = FetchMode.Default): Promise<Mode> {
     return await this.getVariable('m'.charCodeAt(0), fetchMode);
   }
 
@@ -162,39 +177,39 @@ export class Device {
     await this.interface.sendCommand('P'.charCodeAt(0), mode);
   }
 
-  async getPulseWidthSwitchValue(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getPulseWidthSwitchValue(fetchMode: FetchMode = FetchMode.Default): Promise<PulseWidthSwitch> {
     return await this.getVariable('p'.charCodeAt(0), fetchMode);
   }
 
-  async getTriggerRateKnobValue(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getTriggerRateKnobValue(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
     return await this.getVariable('r'.charCodeAt(0), fetchMode);
   }
 
-  async getFirmwareVersion(): Promise<number> {
-    return await this.getVariable('s'.charCodeAt(0));
+  async getFirmwareVersion(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
+    return await this.getVariable('s'.charCodeAt(0), fetchMode);
   }
 
-  async getTriggerModeSwitchValue(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getTriggerModeSwitchValue(fetchMode: FetchMode = FetchMode.Default): Promise<TriggerModeSwitch> {
     return await this.getVariable('t'.charCodeAt(0), fetchMode);
   }
 
-  async getUnitMode(): Promise<number> {
-    return await this.getVariable('u'.charCodeAt(0));
+  async getUnitMode(fetchMode: FetchMode = FetchMode.Default): Promise<UnitMode> {
+    return await this.getVariable('u'.charCodeAt(0), fetchMode);
   }
 
-  async getOutputPercentage(): Promise<number> {
-    return (await this.getVariable('v'.charCodeAt(0), FetchMode.ForceLoad)) / 255;
+  async getOutputPercentage(fetchMode: FetchMode = FetchMode.Default): Promise<number> {
+    if (fetchMode === FetchMode.Default) {
+      fetchMode = FetchMode.ForceLoad;
+    }
+
+    return (await this.getVariable('v'.charCodeAt(0), fetchMode)) / 255;
   }
 
-  async getBuzzerMode(waitForChange: boolean = false): Promise<number> {
-    const fetchMode = waitForChange ? FetchMode.WaitForChange : FetchMode.Default;
+  async getBuzzerMode(fetchMode: FetchMode = FetchMode.Default): Promise<BuzzerMode> {
     return await this.getVariable('z'.charCodeAt(0), fetchMode);
   }
 
-  async setBuzzerMode(buzzerMode: number): Promise<void> {
+  async setBuzzerMode(buzzerMode: BuzzerMode): Promise<void> {
     await this.interface.sendCommand('Z'.charCodeAt(0), buzzerMode);
   }
 
@@ -206,18 +221,28 @@ export class Device {
       }
 
       const { variable, value } = message;
-      this.variableValues.set(variable, value);
+      this.processVariableUpdate(variable, value);
 
-      const pending = this.pendingVariables.get(variable);
-      if (pending) {
-        this.pendingVariables.delete(variable);
-        pending.resolve(value);
+      // Special case: changing the mode resets the info and countdown
+      if (variable === 'm'.charCodeAt(0)) {
+        this.processVariableUpdate('i'.charCodeAt(0), 0);
+        this.processVariableUpdate('d'.charCodeAt(0), 0);
       }
     }
 
     for (const [variable, pending] of this.pendingVariables) {
       this.pendingVariables.delete(variable);
       pending.reject(new Error('connection closed'));
+    }
+  }
+
+  private processVariableUpdate(variable: number, value: number) {
+    this.variableValues.set(variable, value);
+
+    const pending = this.pendingVariables.get(variable);
+    if (pending) {
+      this.pendingVariables.delete(variable);
+      pending.resolve(value);
     }
   }
 
@@ -232,14 +257,8 @@ export class Device {
       return pending.promise;
     }
 
-    let resolve: ((value: number) => void) | null = null;
-    let reject: ((reason: Error) => void) | null = null;
-    const promise = new Promise<number>((resolveFn, rejectFn) => {
-      resolve = resolveFn;
-      reject = rejectFn;
-    });
-
-    this.pendingVariables.set(variable, { promise, resolve: resolve!, reject: reject! });
+    const deferred = new Deferred<number>();
+    this.pendingVariables.set(variable, deferred);
 
     if (!this.streaming && fetchMode === FetchMode.WaitForChange) {
       throw new Error('WaitForChange used while not streaming');
@@ -249,6 +268,6 @@ export class Device {
       await this.interface.sendCommand('G'.charCodeAt(0), variable);
     }
 
-    return promise;
+    return deferred.promise;
   }
 }

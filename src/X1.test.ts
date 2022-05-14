@@ -1,4 +1,4 @@
-import { Device } from './X1';
+import { Device, PulseWidthSwitch } from './X1';
 import { MockSerialPort } from './MockSerialPort';
 import { WebSerialCommunicationsInterface } from './WebSerialCommunicationsInterface';
 import { MockDevice } from './MockDevice';
@@ -53,10 +53,10 @@ test('set variable', async () => {
   const mock = new MockDevice();
 
   const device = new Device(mock);
-  expect(await device.getShortSwitchMode()).toBe(0);
+  expect(await device.getSwitchMode(PulseWidthSwitch.Short)).toBe(0);
 
-  await device.setShortSwitchMode(1);
-  expect(await device.getShortSwitchMode()).toBe(1);
+  await device.setSwitchMode(PulseWidthSwitch.Short, 1);
+  expect(await device.getSwitchMode(PulseWidthSwitch.Short)).toBe(1);
 });
 
 test('set variable serial', async () => {
@@ -67,7 +67,7 @@ test('set variable serial', async () => {
 
   const device = new Device(communicationsInterface);
 
-  await device.setShortSwitchMode(1);
+  await device.setSwitchMode(PulseWidthSwitch.Short, 1);
 
   expect(port.testBytesWritten).toEqual(MockSerialPort.ParseTestBytes([
     '1', 1, '\n',

@@ -10,19 +10,25 @@ export class WebSerialCommunicationsInterface implements CommunicationsInterface
     }
 
     // Retry a number of times as the bluetooth connection can take a while.
+    let error = undefined;
     for (let i = 0; i < 10; ++i) {
       try {
         await port.open({
           baudRate: 115200,
         });
 
+        this.port = port;
+
         break;
       } catch (e) {
+        error = e;
         console.log(e);
       }
     }
 
-    this.port = port;
+    if (this.port === null) {
+      throw error;
+    }
   }
 
   async close(): Promise<void> {

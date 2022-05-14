@@ -7,6 +7,22 @@ export class MockSerialPort implements SerialPort {
   public testBytesWritten: number[] = [];
   private readableStreamController: ReadableStreamController<Uint8Array> | null = null;
 
+  get onconnect(): ((this: SerialPort, ev: Event) => any) | null {
+    return null;
+  }
+
+  set onconnect(value: ((this: SerialPort, ev: Event) => any) | null) {
+    throw new Error('Method not implemented.');
+  }
+
+  get ondisconnect(): ((this: SerialPort, ev: Event) => any) | null {
+    return null;
+  }
+
+  set ondisconnect(value: ((this: SerialPort, ev: Event) => any) | null) {
+    throw new Error('Method not implemented.');
+  }
+
   static ParseTestBytes(bytes: (number | string)[]): number[] {
     return bytes.flatMap(v => {
       if (typeof v === 'string') {
@@ -27,22 +43,6 @@ export class MockSerialPort implements SerialPort {
 
     // TODO: This seems to let our written bytes settle into the reader.
     await new Promise(resolve => setTimeout(resolve, 0));
-  }
-
-  get onconnect(): ((this: SerialPort, ev: Event) => any) | null {
-    return null;
-  }
-
-  set onconnect(value: ((this: SerialPort, ev: Event) => any) | null) {
-    throw new Error('Method not implemented.');
-  }
-
-  get ondisconnect(): ((this: SerialPort, ev: Event) => any) | null {
-    return null;
-  }
-
-  set ondisconnect(value: ((this: SerialPort, ev: Event) => any) | null) {
-    throw new Error('Method not implemented.');
   }
 
   async open(options: SerialOptions): Promise<void> {

@@ -1,7 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { WebSerialCommunicationsInterface } from './WebSerialCommunicationsInterface';
 import { Device } from './X1';
-import { Button } from '@blueprintjs/core';
+import {
+  Button,
+  Card,
+  Classes,
+  ControlGroup,
+  Drawer,
+  DrawerSize,
+  Expander,
+  Radio,
+  RadioGroup,
+} from '@blueprintjs/core';
+import { ErrorBoundary } from './ErrorBoundary';
+import { MockDevice } from './MockDevice';
+import { DeviceStatus } from './DeviceStatus';
+import { MockDeviceControls } from './MockDeviceControls';
+
+type SupportedCommunicationsInterfaces = MockDevice | WebSerialCommunicationsInterface;
 
 enum ConnectionStatus {
   Connecting,
@@ -11,59 +27,37 @@ enum ConnectionStatus {
   Error,
 }
 
+enum ConnectionMode {
+  Mock,
+  Serial,
+  Ble,
+  WebSocket,
+}
+
+interface TransitionState {
+  readonly state: ConnectionStatus.Connecting | ConnectionStatus.Disconnecting;
+}
+
 interface DisconnectedState {
-  state: ConnectionStatus.Disconnected | ConnectionStatus.Connecting | ConnectionStatus.Disconnecting;
+  readonly state: ConnectionStatus.Disconnected;
 }
 
 interface ConnectedState {
-  state: ConnectionStatus.Connected;
-  communicationsInterface: WebSerialCommunicationsInterface;
-  device: Device;
+  readonly state: ConnectionStatus.Connected;
+  readonly communicationsInterface: SupportedCommunicationsInterfaces;
+  readonly device: Device;
 }
 
 interface ErrorState {
-  state: ConnectionStatus.Error;
-  error: Error;
+  readonly state: ConnectionStatus.Error;
+  readonly error: Error;
 }
 
-type ConnectionState = DisconnectedState | ConnectedState | ErrorState;
-
-interface WatcherProps {
-  device: Device,
-  getter: (waitForChange: boolean) => Promise<number>,
-}
-
-function Watcher({ device, getter }: WatcherProps) {
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    let cancel: ((reason?: any) => void) | null = null;
-    const cancelPromise = new Promise<number>((resolve, reject) => {
-      cancel = reject;
-    });
-
-    (async () => {
-      while (true) {
-        try {
-          const value = await Promise.race([getter.call(device, true), cancelPromise]);
-
-          setValue(value);
-        } catch (e) {
-          break;
-        }
-      }
-    })();
-
-    return () => {
-      cancel!();
-    };
-  }, [device, getter]);
-
-  return <span>{value} (0x{value.toString(16).toUpperCase().padStart(2, '0')})</span>;
-}
+type ConnectionState = TransitionState | DisconnectedState | ConnectedState | ErrorState;
 
 export function App() {
-  let [connection, setConnection] = useState<ConnectionState>({ state: ConnectionStatus.Disconnected });
+  const [connection, setConnection] = useState<ConnectionState>({ state: ConnectionStatus.Disconnected });
+  const [connectionMode, setConnectionMode] = useState(ConnectionMode.Serial);
 
   const connect = async () => {
     if (connection.state !== ConnectionStatus.Disconnected) {
@@ -72,14 +66,41 @@ export function App() {
 
     setConnection({ state: ConnectionStatus.Connecting });
 
-    const port = (await navigator.serial.getPorts()).at(0) || (await navigator.serial.requestPort());
+    let communicationsInterface: SupportedCommunicationsInterfaces;
 
-    const communicationsInterface = new WebSerialCommunicationsInterface();
-    await communicationsInterface.open(port);
+    if (connectionMode === ConnectionMode.Mock) {
+      communicationsInterface = new MockDevice();
+    } else if (connectionMode === ConnectionMode.Serial) {
+      try {
+        communicationsInterface = new WebSerialCommunicationsInterface();
+
+        const port = await navigator.serial.requestPort();
+
+        // TODO: Handle the port being closed unexpectedly.
+        await communicationsInterface.open(port);
+      } catch (e) {
+        setConnection({
+          state: ConnectionStatus.Error,
+          error: (e instanceof Error) ? e : new Error('unknown error'),
+        });
+
+        return;
+      }
+    } else {
+      setConnection({
+        state: ConnectionStatus.Error,
+        error: new Error(`Connection mode ${ConnectionMode[connectionMode]} not implemented`),
+      });
+
+      return;
+    }
 
     const device = new Device(communicationsInterface);
+
     if (await device.getFirmwareVersion() !== 20) {
-      await communicationsInterface.close();
+      if ('close' in communicationsInterface) {
+        await communicationsInterface.close();
+      }
 
       setConnection({
         state: ConnectionStatus.Error,
@@ -109,22 +130,49 @@ export function App() {
     setConnection({ state: ConnectionStatus.Disconnecting });
 
     await connection.device.watchVariables(false);
-    await connection.communicationsInterface.close();
+
+    if ('close' in connection.communicationsInterface) {
+      await connection.communicationsInterface.close();
+    }
 
     setConnection({ state: ConnectionStatus.Disconnected });
   };
 
+  const [mockDeviceDialogOpen, setMockDeviceDialogOpen] = useState(false);
+  const usingMockDevice = connection.state === ConnectionStatus.Connected && 'getVariableValues' in connection.communicationsInterface;
+
   return (
     <div className="container">
-      Connection State: {ConnectionStatus[connection.state]}
-      <div>
-        <Button type="button" onClick={connect} disabled={connection.state !== ConnectionStatus.Disconnected}>Connect</Button>
-        <Button type="button" onClick={disconnect} disabled={connection.state !== ConnectionStatus.Connected}>Disconnect</Button>
-      </div>
-      <div>
-        Pulse Rate Knob: {connection.state === ConnectionStatus.Connected ?
-        <Watcher device={connection.device} getter={connection.device.getPulseRateKnobValue} /> : '---'}
-      </div>
+      <Card className="cell">
+        Connection State:{' '}
+        {ConnectionStatus[connection.state]}{connection.state === ConnectionStatus.Error ? ` (${connection.error.message})` : undefined}
+        <ControlGroup className="connection-buttons">
+          <Button onClick={connect} disabled={connection.state !== ConnectionStatus.Disconnected}>Connect</Button>
+          <Button onClick={disconnect} disabled={connection.state !== ConnectionStatus.Connected}>Disconnect</Button>
+          {usingMockDevice ? <>
+            <Expander />
+            <Button icon="cog" onClick={() => setMockDeviceDialogOpen(true)} />
+            <Drawer isOpen={mockDeviceDialogOpen} onClose={() => setMockDeviceDialogOpen(false)} size={DrawerSize.SMALL} title="Mock Device State">
+              <div className={Classes.DRAWER_BODY}>
+                <div className={Classes.DIALOG_BODY}>
+                  <MockDeviceControls device={connection.device} mockDevice={connection.communicationsInterface} />
+                </div>
+              </div>
+            </Drawer>
+          </> : undefined}
+        </ControlGroup>
+      </Card>
+      {connection.state === ConnectionStatus.Disconnected ? <Card className="cell">
+        <RadioGroup label="Connection Mode" onChange={ev => setConnectionMode(+ev.currentTarget.value)} selectedValue={connectionMode}>
+          <Radio value={ConnectionMode.Mock} label="Mock" />
+          <Radio value={ConnectionMode.Serial} label="Serial" />
+          <Radio value={ConnectionMode.Ble} label="Bluetooth LE" />
+          <Radio value={ConnectionMode.WebSocket} label="WebSocket" />
+        </RadioGroup>
+      </Card> : undefined}
+      <ErrorBoundary>
+        {connection.state === ConnectionStatus.Connected ? <DeviceStatus device={connection.device} /> : undefined}
+      </ErrorBoundary>
     </div>
   );
 }

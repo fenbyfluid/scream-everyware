@@ -6,14 +6,75 @@
 @import "~@blueprintjs/icons/lib/css/blueprint-icons.css";
 
 body {
-  margin: 0;
+    margin: 0;
 }
 
 body.bp4-dark {
-  background-color: #394b59;
+    background-color: #394b59;
 }
 
 .container {
-  max-width: 768px;
-  margin: 0 auto;
+    max-width: 768px;
+    margin: 0 auto;
+}
+
+.connection-buttons {
+    margin-top: 10px;
+    margin-bottom: 20px;
+}
+
+.cell {
+    margin: 20px;
+}
+
+.panel-container {
+    margin-left: -20px;
+    margin-right: -20px;
+}
+
+@media (min-width: 600px) {
+    .panel-container {
+        display: flex;
+    }
+
+    .panel {
+        flex: 1 1 auto;
+    }
+
+    .panel + .panel {
+        margin-left: -20px;
+    }
+
+    .panel-right {
+        max-width: 300px;
+    }
+}
+
+.panel > .cell:first-child {
+    margin-top: 0;
+}
+
+.bp4-tab-list.bp4-large {
+    align-items: center;
+}
+
+.bp4-card > :last-child {
+    margin-bottom: 0;
+}
+
+.bp4-tab-panel > .cell {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.sidebar-tag, .sidebar-slider {
+    margin: 20px 0;
+}
+
+.sidebar-tag + .sidebar-tag {
+    margin-left: 20px;
+}
+
+.sidebar-slider > .bp4-form-content {
+    margin: 0 10px;
 }
