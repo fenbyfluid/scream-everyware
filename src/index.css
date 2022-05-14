@@ -74,6 +74,10 @@ body.bp4-dark {
     margin-top: 0;
 }
 
+.panel > .cell:last-child {
+    margin-bottom: 0;
+}
+
 .bp4-tab-list.bp4-large {
     align-items: center;
 }

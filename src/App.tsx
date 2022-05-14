@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { WebSerialCommunicationsInterface } from './WebSerialCommunicationsInterface';
 import { Device } from './X1';
 import {
@@ -11,9 +11,12 @@ import {
   Elevation,
   Expander,
   H2,
+  CalloutProps,
   Icon,
   Radio,
   RadioGroup,
+  Callout,
+  Intent,
 } from '@blueprintjs/core';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MockDevice } from './MockDevice';
@@ -28,13 +31,6 @@ enum ConnectionStatus {
   Disconnecting,
   Disconnected,
   Error,
-}
-
-enum ConnectionMode {
-  Mock,
-  Serial,
-  Ble,
-  WebSocket,
 }
 
 interface TransitionState {
@@ -58,12 +54,82 @@ interface ErrorState {
 
 type ConnectionState = TransitionState | DisconnectedState | ConnectedState | ErrorState;
 
+enum ConnectionMode {
+  Mock,
+  Serial,
+  Ble,
+  WebSocket,
+}
+
+function defaultConnectionModes(): Set<ConnectionMode> {
+  const modes = new Set<ConnectionMode>();
+
+  if (typeof window.navigator?.serial?.requestPort === 'function') {
+    modes.add(ConnectionMode.Serial);
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    modes.add(ConnectionMode.Mock);
+  }
+
+  return modes;
+}
+
+function ConnectionModeHelpCallout({ mode, ...passThroughProps }: { mode: ConnectionMode | undefined } & CalloutProps) {
+  switch (mode) {
+    case ConnectionMode.Mock:
+      return <Callout intent={Intent.PRIMARY} {...passThroughProps}>
+        "Connect" to a mock device for testing purposes.<br />
+        Use the <Icon icon="cog" /> button to configure the mock device once connected.
+      </Callout>;
+    case ConnectionMode.Serial:
+      return <Callout intent={Intent.PRIMARY} {...passThroughProps}>
+        Connect to an X1 device using Bluetooth Serial - same as the included software.<br />
+        You must pair the X1 to your device first, following the instructions in the user manual.
+      </Callout>;
+    case ConnectionMode.Ble:
+    case ConnectionMode.WebSocket:
+    case undefined:
+      return <Callout intent={Intent.WARNING} {...passThroughProps}>
+        Your browser does not support any methods to connect to an X1 device.
+      </Callout>;
+  }
+
+  return null;
+}
+
 export function App() {
   const [connection, setConnection] = useState<ConnectionState>({ state: ConnectionStatus.Disconnected });
-  const [connectionMode, setConnectionMode] = useState(ConnectionMode.Serial);
+  const [enabledConnectionModes, setEnabledConnectionModes] = useState(defaultConnectionModes);
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode | undefined>(() => {
+    const [defaultConnectionMode] = enabledConnectionModes;
+    return defaultConnectionMode;
+  });
+
+  useEffect(() => {
+    // @ts-ignore
+    window.enableMockDevice = () => {
+      setEnabledConnectionModes(modes => {
+        return new Set([...modes.keys(), ConnectionMode.Mock]);
+      });
+
+      setConnectionMode(mode => {
+        if (mode !== undefined) {
+          return mode;
+        }
+
+        return ConnectionMode.Mock;
+      });
+    };
+
+    return () => {
+      // @ts-ignore
+      delete window.enableMockDevice;
+    };
+  }, []);
 
   const connect = async () => {
-    if (connection.state !== ConnectionStatus.Disconnected) {
+    if (connection.state !== ConnectionStatus.Disconnected || connectionMode === undefined) {
       return;
     }
 
@@ -151,11 +217,11 @@ export function App() {
         Scream Everyware</H2>
       <Card elevation={Elevation.ONE} className="cell">
         Connection State:{' '}
-        {ConnectionStatus[connection.state]}{connection.state === ConnectionStatus.Error ? ` (${connection.error.message})` : undefined}
+        {ConnectionStatus[connection.state]}{connection.state === ConnectionStatus.Error && ` (${connection.error.message})`}
         <ControlGroup className="connection-buttons">
-          <Button onClick={connect} disabled={connection.state !== ConnectionStatus.Disconnected}>Connect</Button>
+          <Button onClick={connect} disabled={connection.state !== ConnectionStatus.Disconnected || connectionMode === undefined}>Connect</Button>
           <Button onClick={disconnect} disabled={connection.state !== ConnectionStatus.Connected}>Disconnect</Button>
-          {usingMockDevice ? <>
+          {usingMockDevice && <>
             <Expander />
             <Button icon="cog" onClick={() => setMockDeviceDialogOpen(true)} />
             <Drawer isOpen={mockDeviceDialogOpen} onClose={() => setMockDeviceDialogOpen(false)} size={DrawerSize.SMALL} title="Mock Device State">
@@ -165,19 +231,22 @@ export function App() {
                 </div>
               </div>
             </Drawer>
-          </> : undefined}
+          </>}
         </ControlGroup>
       </Card>
-      {connection.state === ConnectionStatus.Disconnected ? <Card elevation={Elevation.ONE} className="cell">
-        <RadioGroup label="Connection Mode" onChange={ev => setConnectionMode(+ev.currentTarget.value)} selectedValue={connectionMode}>
-          <Radio value={ConnectionMode.Mock} label="Mock" />
-          <Radio value={ConnectionMode.Serial} label="Serial" />
-          <Radio value={ConnectionMode.Ble} label="Bluetooth LE" />
-          <Radio value={ConnectionMode.WebSocket} label="WebSocket" />
+      {connection.state === ConnectionStatus.Disconnected && enabledConnectionModes.size > 1 && <Card elevation={Elevation.ONE} className="cell">
+        <RadioGroup label="Connect Using" onChange={ev => setConnectionMode(+ev.currentTarget.value)} selectedValue={connectionMode}>
+          {enabledConnectionModes.has(ConnectionMode.Mock) && <Radio value={ConnectionMode.Mock} label="Mock Device" />}
+          {enabledConnectionModes.has(ConnectionMode.Serial) && <Radio value={ConnectionMode.Serial} label="Bluetooth Serial" />}
+          {enabledConnectionModes.has(ConnectionMode.Ble) && <Radio value={ConnectionMode.Ble} label="X1 Bridge (Bluetooth)" />}
+          {enabledConnectionModes.has(ConnectionMode.WebSocket) && <Radio value={ConnectionMode.WebSocket} label="X1 Bridge (WebSocket)" />}
         </RadioGroup>
-      </Card> : undefined}
+      </Card>}
+      {connection.state === ConnectionStatus.Disconnected && <div className="cell">
+          <ConnectionModeHelpCallout mode={connectionMode} />
+      </div>}
       <ErrorBoundary>
-        {connection.state === ConnectionStatus.Connected ? <DeviceStatus device={connection.device} /> : undefined}
+        {connection.state === ConnectionStatus.Connected && <DeviceStatus device={connection.device} />}
       </ErrorBoundary>
     </div>
   );

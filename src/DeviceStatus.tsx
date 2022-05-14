@@ -216,12 +216,12 @@ function StatusPanel({ device }: { device: Device }) {
         <FormGroup label="Current Mode" labelFor="currentModeSelect">
           <ModeSelect id="currentModeSelect" fill={true} device={device} unitMode={useDeviceValue(device, device.getUnitMode)} getter={device.getCurrentMode} setter={device.setCurrentMode} />
         </FormGroup>
-        {showModeInfo ? <FormGroup label="Mode Info">
+        {showModeInfo && <FormGroup label="Mode Info">
           <Tag minimal={true} large={true}>{modeInfo}</Tag>
-        </FormGroup> : undefined}
-        {showCountDown ? <FormGroup label="Countdown">
+        </FormGroup>}
+        {showCountDown && <FormGroup label="Countdown">
           <Tag minimal={true} large={true} intent={countDownTimeRemaining <= 10 ? Intent.DANGER : Intent.NONE}>{formatTime(countDownTimeRemaining)}</Tag>
-        </FormGroup> : undefined}
+        </FormGroup>}
       </Card>
       <Card elevation={Elevation.ONE} className="cell">
         <FormGroup label="Pulse Switch">
