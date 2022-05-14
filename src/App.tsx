@@ -8,6 +8,7 @@ import {
   ControlGroup,
   Drawer,
   DrawerSize,
+  Elevation,
   Expander,
   Radio,
   RadioGroup,
@@ -143,7 +144,7 @@ export function App() {
 
   return (
     <div className="container">
-      <Card className="cell">
+      <Card elevation={Elevation.ONE} className="cell">
         Connection State:{' '}
         {ConnectionStatus[connection.state]}{connection.state === ConnectionStatus.Error ? ` (${connection.error.message})` : undefined}
         <ControlGroup className="connection-buttons">
@@ -162,7 +163,7 @@ export function App() {
           </> : undefined}
         </ControlGroup>
       </Card>
-      {connection.state === ConnectionStatus.Disconnected ? <Card className="cell">
+      {connection.state === ConnectionStatus.Disconnected ? <Card elevation={Elevation.ONE} className="cell">
         <RadioGroup label="Connection Mode" onChange={ev => setConnectionMode(+ev.currentTarget.value)} selectedValue={connectionMode}>
           <Radio value={ConnectionMode.Mock} label="Mock" />
           <Radio value={ConnectionMode.Serial} label="Serial" />

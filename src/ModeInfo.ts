@@ -3,12 +3,24 @@ import { Mode, PulseWidthSwitch, TriggerModeSwitch } from './X1';
 interface IModeInfo {
   readonly name: string;
 
+  canRemoteTrigger(): boolean;
+  canSetChannels(triggerModeSwitchValue: TriggerModeSwitch): boolean;
+  canSetBuzzMode(): boolean;
   getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null;
 }
 
 export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   [Mode.Torment]: {
     name: 'Torment',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -24,6 +36,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.SmoothSuffering]: {
     name: 'Smooth Suffering',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -39,6 +60,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.BitchTraining]: {
     name: 'Bitch Training',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -54,6 +84,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.TurboThruster]: {
     name: 'Turbo Thruster',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return false;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -69,6 +108,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.Random]: {
     name: 'Random',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return false;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue === TriggerModeSwitch.Audio) {
         switch (pulseWidthSwitchValue) {
@@ -97,6 +145,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.RandomBitch]: {
     name: 'Random Bitch',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return false;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue === TriggerModeSwitch.Audio) {
         switch (pulseWidthSwitchValue) {
@@ -125,6 +182,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.Purgatory]: {
     name: 'Purgatory',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return false;
+    },
+    canSetBuzzMode(): boolean {
+      return false;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -140,6 +206,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.PurgatoryChaos]: {
     name: 'Purgatory Chaos',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return false;
+    },
+    canSetBuzzMode(): boolean {
+      return false;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -155,6 +230,24 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.PersistentPain]: {
     name: 'Persistent Pain',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(triggerModeSwitchValue: TriggerModeSwitch): boolean {
+      switch (triggerModeSwitchValue) {
+        case TriggerModeSwitch.Continuous:
+          return false;
+        case TriggerModeSwitch.Pulse:
+          return false;
+        case TriggerModeSwitch.Manual:
+          return true;
+        case TriggerModeSwitch.Audio:
+          return false;
+      }
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue === TriggerModeSwitch.Continuous) {
         switch (pulseWidthSwitchValue) {
@@ -187,6 +280,24 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.Pulse]: {
     name: 'Pulse',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(triggerModeSwitchValue: TriggerModeSwitch): boolean {
+      switch (triggerModeSwitchValue) {
+        case TriggerModeSwitch.Continuous:
+          return false;
+        case TriggerModeSwitch.Pulse:
+          return false;
+        case TriggerModeSwitch.Manual:
+          return true;
+        case TriggerModeSwitch.Audio:
+          return false;
+      }
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue === TriggerModeSwitch.Continuous) {
         switch (pulseWidthSwitchValue) {
@@ -219,6 +330,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.RampPulse]: {
     name: 'Ramp Pulse',
+    canRemoteTrigger(): boolean {
+      return false;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue === TriggerModeSwitch.Audio) {
         return null;
@@ -238,6 +358,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.RampRepeat]: {
     name: 'Ramp Repeat',
+    canRemoteTrigger(): boolean {
+      return false;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue === TriggerModeSwitch.Audio) {
         return null;
@@ -257,6 +386,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.RampIntensity]: {
     name: 'Ramp Intensity',
+    canRemoteTrigger(): boolean {
+      return false;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue === TriggerModeSwitch.Audio) {
         return null;
@@ -276,6 +414,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.AudioAttack]: {
     name: 'Audio Attack',
+    canRemoteTrigger(): boolean {
+      return false;
+    },
+    canSetChannels(): boolean {
+      return false;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch, triggerModeSwitchValue: TriggerModeSwitch): string | null {
       if (triggerModeSwitchValue !== TriggerModeSwitch.Audio) {
         return null;
@@ -295,6 +442,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.TormentLowVoltage]: {
     name: 'Torment (LV)',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -308,8 +464,17 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
       }
     },
   },
-  [Mode.PowerWavesLowVoltage]: {
+  [Mode.PowerWaves]: {
     name: 'Power Waves (LV)',
+    canRemoteTrigger(): boolean {
+      return false;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -317,22 +482,31 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
         case PulseWidthSwitch.Normal:
           return 'Power Waves';
         case PulseWidthSwitch.Medium:
-          return 'Intense sweep';
+          return 'Intense Sweep';
         case PulseWidthSwitch.Long:
-          return 'Up sweeps';
+          return 'Up Sweeps';
       }
     },
   },
   [Mode.SpeedWaves]: {
     name: 'Speed Waves',
+    canRemoteTrigger(): boolean {
+      return false;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
           return 'Throb';
         case PulseWidthSwitch.Normal:
-          return 'Fast sweep';
+          return 'Fast Sweep';
         case PulseWidthSwitch.Medium:
-          return 'Speed waves';
+          return 'Speed Waves';
         case PulseWidthSwitch.Long:
           return 'Upstrokes';
       }
@@ -340,21 +514,39 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.DemonPlay]: {
     name: 'Demon Play',
+    canRemoteTrigger(): boolean {
+      return false;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
-          return 'Hard throb';
+          return 'Hard Throb';
         case PulseWidthSwitch.Normal:
-          return 'Hard throb ramp';
+          return 'Hard Throb Ramp';
         case PulseWidthSwitch.Medium:
-          return 'Hell fire';
+          return 'Hell Fire';
         case PulseWidthSwitch.Long:
-          return 'Hell fire ramp';
+          return 'Hell Fire Ramp';
       }
     },
   },
   [Mode.ExtremeTorment]: {
     name: 'Extreme Torment',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:
@@ -370,6 +562,15 @@ export const ModeInfo: { [Property in Mode]: IModeInfo; } = {
   },
   [Mode.ExtremeBitchTraining]: {
     name: 'Extreme Bitch Training',
+    canRemoteTrigger(): boolean {
+      return true;
+    },
+    canSetChannels(): boolean {
+      return true;
+    },
+    canSetBuzzMode(): boolean {
+      return true;
+    },
     getPulseWidthSwitchLabel(pulseWidthSwitchValue: PulseWidthSwitch): string | null {
       switch (pulseWidthSwitchValue) {
         case PulseWidthSwitch.Short:

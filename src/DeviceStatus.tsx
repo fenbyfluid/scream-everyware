@@ -5,6 +5,7 @@ import {
   Card,
   Classes,
   ControlGroup,
+  Elevation,
   FormGroup,
   HTMLSelect,
   HTMLSelectProps,
@@ -88,8 +89,7 @@ interface TriggerButtonProps {
 }
 
 function TriggerButton({ device, currentMode, triggerModeSwitchValue }: TriggerButtonProps) {
-  // TODO: Consider the current mode as well.
-  const enabled = triggerModeSwitchValue === TriggerModeSwitch.Manual;
+  const enabled = (triggerModeSwitchValue === TriggerModeSwitch.Manual) && ModeInfo[currentMode].canRemoteTrigger();
 
   const [triggerTime, setTriggerTime] = useState(1.0);
   const onClick = async () => {
@@ -105,11 +105,11 @@ function TriggerButton({ device, currentMode, triggerModeSwitchValue }: TriggerB
 interface ChannelSwitchesProps {
   device: Device;
   currentMode: Mode;
+  triggerModeSwitchValue: TriggerModeSwitch;
 }
 
-function ChannelSwitches({ device, currentMode }: ChannelSwitchesProps) {
-  // TODO: Consider the current mode.
-  const enabled = true;
+function ChannelSwitches({ device, currentMode, triggerModeSwitchValue }: ChannelSwitchesProps) {
+  const enabled = ModeInfo[currentMode].canSetChannels(triggerModeSwitchValue);
 
   const [desiredChannels, setDesiredChannels] = useState(0);
 
@@ -172,8 +172,9 @@ function InputVoltage({ device }: { device: Device }) {
     }
   })();
 
-  return <Tag intent={intent} large={true} minimal={intent === Intent.NONE}>Power Supply: {inputVoltage}V
-    ({label})</Tag>;
+  return <Tag intent={intent} large={true} minimal={intent === Intent.NONE}>
+    Power Supply: {inputVoltage}V ({label})
+  </Tag>;
 }
 
 function StatusPanel({ device }: { device: Device }) {
@@ -186,6 +187,15 @@ function StatusPanel({ device }: { device: Device }) {
   const pulseWidthSwitchValue = useDeviceValue(device, device.getPulseWidthSwitchValue);
   const triggerModeSwitchValue = useDeviceValue(device, device.getTriggerModeSwitchValue);
 
+  useEffect(() => {
+    setShowModeInfo(false);
+    setShowCountDown(false);
+  }, [currentMode]);
+
+  useEffect(() => {
+    setShowCountDown(false);
+  }, [triggerModeSwitchValue]);
+
   if (!showModeInfo && modeInfo > 0) {
     setShowModeInfo(true);
   }
@@ -194,14 +204,15 @@ function StatusPanel({ device }: { device: Device }) {
     setShowCountDown(true);
   }
 
-  useEffect(() => {
-    setShowModeInfo(false);
-    setShowCountDown(false);
-  }, [currentMode]);
+  const formatTime = (v: number): string => {
+    const minutes = (v / 60) | 0;
+    const seconds = v % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   return <div className="panel-container">
     <div className="panel panel-left">
-      <Card className="cell">
+      <Card elevation={Elevation.ONE} className="cell">
         <FormGroup label="Current Mode" labelFor="currentModeSelect">
           <ModeSelect id="currentModeSelect" fill={true} device={device} unitMode={useDeviceValue(device, device.getUnitMode)} getter={device.getCurrentMode} setter={device.setCurrentMode} />
         </FormGroup>
@@ -209,10 +220,10 @@ function StatusPanel({ device }: { device: Device }) {
           <Tag minimal={true} large={true}>{modeInfo}</Tag>
         </FormGroup> : undefined}
         {showCountDown ? <FormGroup label="Countdown">
-          <Tag minimal={true} large={true}>{countDownTimeRemaining}</Tag>
+          <Tag minimal={true} large={true} intent={countDownTimeRemaining <= 10 ? Intent.DANGER : Intent.NONE}>{formatTime(countDownTimeRemaining)}</Tag>
         </FormGroup> : undefined}
       </Card>
-      <Card className="cell">
+      <Card elevation={Elevation.ONE} className="cell">
         <FormGroup label="Pulse Switch">
           <Tag minimal={true} large={true}>{PulseWidthSwitch[pulseWidthSwitchValue]}</Tag>
           {' '}
@@ -230,14 +241,14 @@ function StatusPanel({ device }: { device: Device }) {
       </Card>
     </div>
     <div className="panel panel-right">
-      <Card className="cell">
-        <ChannelSwitches device={device} currentMode={currentMode} />
+      <Card elevation={Elevation.ONE} className="cell">
+        <ChannelSwitches device={device} currentMode={currentMode} triggerModeSwitchValue={triggerModeSwitchValue} />
       </Card>
       <div className="cell">
         <TriggerButton device={device} currentMode={currentMode} triggerModeSwitchValue={triggerModeSwitchValue} />
       </div>
-      <Card className="cell">
-        <Switch checked={useDeviceValue(device, device.getBuzzerMode) === BuzzerMode.Always} onChange={ev => device.setBuzzerMode(ev.currentTarget.checked ? BuzzerMode.Always : BuzzerMode.WhenOutput)}>
+      <Card elevation={Elevation.ONE} className="cell">
+        <Switch checked={useDeviceValue(device, device.getBuzzerMode) === BuzzerMode.Always} onChange={ev => device.setBuzzerMode(ev.currentTarget.checked ? BuzzerMode.Always : BuzzerMode.WhenOutput)} disabled={!ModeInfo[currentMode].canSetBuzzMode()}>
           Buzz Always On
         </Switch>
       </Card>
@@ -247,7 +258,7 @@ function StatusPanel({ device }: { device: Device }) {
 
 function SettingsPanel({ device }: { device: Device }) {
   return <>
-    <Card className="cell">
+    <Card elevation={Elevation.ONE} className="cell">
       <PulseSwitchModeSelect device={device} />
     </Card>
   </>;

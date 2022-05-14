@@ -57,7 +57,7 @@ export enum Mode {
   RampIntensity,
   AudioAttack,
   TormentLowVoltage,
-  PowerWavesLowVoltage,
+  PowerWaves,
   SpeedWaves,
   DemonPlay,
   ExtremeTorment = 0x80,
@@ -226,6 +226,11 @@ export class Device {
       // Special case: changing the mode resets the info and countdown
       if (variable === 'm'.charCodeAt(0)) {
         this.processVariableUpdate('i'.charCodeAt(0), 0);
+        this.processVariableUpdate('d'.charCodeAt(0), 0);
+      }
+
+      // Special case: changing the trigger switch resets the countdown
+      if (variable === 't'.charCodeAt(0)) {
         this.processVariableUpdate('d'.charCodeAt(0), 0);
       }
     }
