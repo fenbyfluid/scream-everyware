@@ -36,6 +36,11 @@ body.bp4-dark {
 .container {
     max-width: 768px;
     margin: 0 auto;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 20px;
 }
 
 .connection-buttons {
@@ -43,30 +48,37 @@ body.bp4-dark {
     margin-bottom: 20px;
 }
 
-.cell {
-    margin: 20px;
+.panel-container, .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
-.panel-container {
-    margin-left: -20px;
-    margin-right: -20px;
+.panel {
+    flex: 1 1 auto;
+}
+
+.footer {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: space-between;
+}
+
+.footer > :first-child {
+    margin-bottom: 0;
 }
 
 @media (min-width: 600px) {
     .panel-container {
-        display: flex;
-    }
-
-    .panel {
-        flex: 1 1 auto;
-    }
-
-    .panel + .panel {
-        margin-left: -20px;
+        flex-direction: row;
     }
 
     .panel-right {
         max-width: 300px;
+    }
+
+    .footer {
+        flex-direction: row;
     }
 }
 

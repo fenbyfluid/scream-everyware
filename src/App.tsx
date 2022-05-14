@@ -3,6 +3,8 @@ import { WebSerialCommunicationsInterface } from './WebSerialCommunicationsInter
 import { Device } from './X1';
 import {
   Button,
+  Callout,
+  CalloutProps,
   Card,
   Classes,
   ControlGroup,
@@ -11,12 +13,10 @@ import {
   Elevation,
   Expander,
   H2,
-  CalloutProps,
   Icon,
+  Intent,
   Radio,
   RadioGroup,
-  Callout,
-  Intent,
 } from '@blueprintjs/core';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MockDevice } from './MockDevice';
@@ -79,19 +79,19 @@ function ConnectionModeHelpCallout({ mode, ...passThroughProps }: { mode: Connec
   switch (mode) {
     case ConnectionMode.Mock:
       return <Callout intent={Intent.PRIMARY} {...passThroughProps}>
-        "Connect" to a mock device for testing purposes.<br />
-        Use the <Icon icon="cog" /> button to configure the mock device once connected.
+        <p>"Connect" to a mock device for testing purposes.</p>
+        <p>Use the <Icon icon="cog" /> button to configure the mock device once connected.</p>
       </Callout>;
     case ConnectionMode.Serial:
       return <Callout intent={Intent.PRIMARY} {...passThroughProps}>
-        Connect to an X1 device using Bluetooth Serial - same as the included software.<br />
-        You must pair the X1 to your device first, following the instructions in the user manual.
+        <p>Connect to an X1 device using Bluetooth Serial - same as the included software.</p>
+        <p>You must pair the X1 to your device first, following the instructions in the user manual.</p>
       </Callout>;
     case ConnectionMode.Ble:
     case ConnectionMode.WebSocket:
     case undefined:
       return <Callout intent={Intent.WARNING} {...passThroughProps}>
-        Your browser does not support any methods to connect to an X1 device.
+        <p>Your browser does not support any methods to connect to an X1 device.</p>
       </Callout>;
   }
 
@@ -173,7 +173,7 @@ export function App() {
 
       setConnection({
         state: ConnectionStatus.Error,
-        error: new Error('firmware version mismatch'),
+        error: new Error('Firmware version mismatch. Ensure the device is using version 2.0.'),
       });
 
       return;
@@ -216,8 +216,7 @@ export function App() {
         <Icon icon="offline" size={32} color="#ff3366" style={{ marginRight: 10 }} />
         Scream Everyware</H2>
       <Card elevation={Elevation.ONE} className="cell">
-        Connection State:{' '}
-        {ConnectionStatus[connection.state]}{connection.state === ConnectionStatus.Error && ` (${connection.error.message})`}
+        Connection State: {ConnectionStatus[connection.state]}
         <ControlGroup className="connection-buttons">
           <Button onClick={connect} disabled={connection.state !== ConnectionStatus.Disconnected || connectionMode === undefined}>Connect</Button>
           <Button onClick={disconnect} disabled={connection.state !== ConnectionStatus.Connected}>Disconnect</Button>
@@ -234,6 +233,16 @@ export function App() {
           </>}
         </ControlGroup>
       </Card>
+      {connection.state === ConnectionStatus.Error && <Callout intent={Intent.DANGER} icon={null}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Icon intent={Intent.DANGER} size={20} icon="error" style={{ marginRight: 10 }} />
+          <span>{connection.error.message}</span>
+          <Expander />
+          <Button intent={Intent.DANGER} outlined={true} onClick={() => setConnection({ state: ConnectionStatus.Disconnected })}>
+            Try Again
+          </Button>
+        </div>
+      </Callout>}
       {connection.state === ConnectionStatus.Disconnected && enabledConnectionModes.size > 1 && <Card elevation={Elevation.ONE} className="cell">
         <RadioGroup label="Connect Using" onChange={ev => setConnectionMode(+ev.currentTarget.value)} selectedValue={connectionMode}>
           {enabledConnectionModes.has(ConnectionMode.Mock) && <Radio value={ConnectionMode.Mock} label="Mock Device" />}
@@ -248,6 +257,19 @@ export function App() {
       <ErrorBoundary>
         {connection.state === ConnectionStatus.Connected && <DeviceStatus device={connection.device} />}
       </ErrorBoundary>
+      <Expander />
+      <div className={`footer cell ${Classes.TEXT_SMALL} ${Classes.TEXT_MUTED}`}>
+        <p>
+          Created with{' '}
+          <a target="_blank" rel="noreferrer" href="https://blueprintjs.com">Blueprint</a>
+          {' '}and{' '}
+          <a target="_blank" rel="noreferrer" href="https://reactjs.org">React</a>
+        </p>
+        {(process.env.REACT_APP_GITHUB_REPO ?? '').length > 0 && <p>
+          {/* eslint-disable-next-line */}
+          <a target="_blank" rel="noopener" href={`https://github.com/${process.env.REACT_APP_GITHUB_REPO}`}>Fork me on GitHub</a>
+        </p>}
+      </div>
     </div>
   );
 }
