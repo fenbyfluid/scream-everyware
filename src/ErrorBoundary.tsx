@@ -1,4 +1,4 @@
-import { H1 } from '@blueprintjs/core';
+import { H2 } from '@blueprintjs/core';
 import React, { ErrorInfo } from 'react';
 
 interface ErrorBoundaryProps {
@@ -28,7 +28,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   render() {
     if (this.state.hasError) {
       // You can render any custom fallback UI
-      return <H1>Something went wrong.</H1>;
+      return <H2>Something went wrong.</H2>;
     }
 
     return this.props.children;

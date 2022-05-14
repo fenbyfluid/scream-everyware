@@ -10,6 +10,8 @@ import {
   DrawerSize,
   Elevation,
   Expander,
+  H2,
+  Icon,
   Radio,
   RadioGroup,
 } from '@blueprintjs/core';
@@ -144,6 +146,9 @@ export function App() {
 
   return (
     <div className="container">
+      <H2 className="cell">
+        <Icon icon="offline" size={32} color="#ff3366" style={{ marginRight: 10 }} />
+        Scream Everyware</H2>
       <Card elevation={Elevation.ONE} className="cell">
         Connection State:{' '}
         {ConnectionStatus[connection.state]}{connection.state === ConnectionStatus.Error ? ` (${connection.error.message})` : undefined}
