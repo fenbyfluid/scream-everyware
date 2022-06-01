@@ -1,0 +1,15 @@
+.bridge-device-menu {
+    padding: 0;
+    margin-bottom: 20px;
+}
+
+.bridge-device-menu .bp4-menu-item {
+    padding: 10px;
+}
+
+.bridge-device-menu .no-results-item {
+    border-radius: 2px;
+    line-height: 20px;
+    padding: 10px;
+    text-align: center;
+}

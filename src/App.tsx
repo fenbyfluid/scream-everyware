@@ -22,27 +22,39 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { MockDevice } from './MockDevice';
 import { DeviceStatus } from './DeviceStatus';
 import { MockDeviceControls } from './MockDeviceControls';
+import {
+  WebBluetoothCommunicationsInterface,
+  RequestDeviceOptions,
+} from './WebBluetoothCommunicationsInterface';
+import { BridgeBattery, BridgeSettings } from './BridgeSettings';
 
-type SupportedCommunicationsInterfaces = MockDevice | WebSerialCommunicationsInterface;
+type SupportedCommunicationsInterfaces = WebSerialCommunicationsInterface | WebBluetoothCommunicationsInterface | MockDevice;
 
 enum ConnectionStatus {
-  Connecting,
-  Connected,
+  InterfaceConnecting,
+  InterfaceConnected,
+  DeviceConnecting,
+  DeviceConnected,
   Disconnecting,
   Disconnected,
   Error,
 }
 
 interface TransitionState {
-  readonly state: ConnectionStatus.Connecting | ConnectionStatus.Disconnecting;
+  readonly state: ConnectionStatus.InterfaceConnecting| ConnectionStatus.DeviceConnecting | ConnectionStatus.Disconnecting;
 }
 
 interface DisconnectedState {
   readonly state: ConnectionStatus.Disconnected;
 }
 
-interface ConnectedState {
-  readonly state: ConnectionStatus.Connected;
+interface InterfaceConnectedState {
+  readonly state: ConnectionStatus.InterfaceConnected;
+  readonly communicationsInterface: SupportedCommunicationsInterfaces;
+}
+
+interface DeviceConnectedState {
+  readonly state: ConnectionStatus.DeviceConnected;
   readonly communicationsInterface: SupportedCommunicationsInterfaces;
   readonly device: Device;
 }
@@ -52,7 +64,7 @@ interface ErrorState {
   readonly error: Error;
 }
 
-type ConnectionState = TransitionState | DisconnectedState | ConnectedState | ErrorState;
+type ConnectionState = TransitionState | DisconnectedState | InterfaceConnectedState | DeviceConnectedState | ErrorState;
 
 enum ConnectionMode {
   Mock,
@@ -66,6 +78,10 @@ function defaultConnectionModes(): Set<ConnectionMode> {
 
   if (typeof window.navigator?.serial?.requestPort === 'function') {
     modes.add(ConnectionMode.Serial);
+  }
+
+  if (typeof window.navigator?.bluetooth?.requestDevice === 'function') {
+    modes.add(ConnectionMode.Ble);
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -88,6 +104,14 @@ function ConnectionModeHelpCallout({ mode, ...passThroughProps }: { mode: Connec
         <p>You must pair the X1 to your device first, following the instructions in the user manual.</p>
       </Callout>;
     case ConnectionMode.Ble:
+      return <Callout intent={Intent.PRIMARY} {...passThroughProps}>
+        <p>Connect to an X1 device via an X1 Bridge module.</p>
+        <p>The X1 Bridge is a BLE bridge for devices that do not support legacy Bluetooth Classic used by the X1.</p>
+        {(process.env.REACT_APP_X1_BRIDGE_URL ?? '').length > 0 && <p>
+          {/* eslint-disable-next-line */}
+          <a target="_blank" rel="noopener" href={process.env.REACT_APP_X1_BRIDGE_URL}>Click here</a> to learn more about the X1 Bridge project.
+        </p>}
+      </Callout>;
     case ConnectionMode.WebSocket:
     case undefined:
       return <Callout intent={Intent.WARNING} {...passThroughProps}>
@@ -133,7 +157,7 @@ export function App() {
       return;
     }
 
-    setConnection({ state: ConnectionStatus.Connecting });
+    setConnection({ state: ConnectionStatus.InterfaceConnecting });
 
     let communicationsInterface: SupportedCommunicationsInterfaces;
 
@@ -155,6 +179,32 @@ export function App() {
 
         return;
       }
+    } else if (connectionMode === ConnectionMode.Ble) {
+      try {
+        communicationsInterface = new WebBluetoothCommunicationsInterface();
+
+        const device = await navigator.bluetooth.requestDevice(RequestDeviceOptions);
+
+        // TODO: Handle the device disconnecting unexpectedly.
+        await communicationsInterface.open(device);
+
+        // @ts-ignore
+        window.communicationsInterface = communicationsInterface;
+
+        setConnection({
+          state: ConnectionStatus.InterfaceConnected,
+          communicationsInterface,
+        });
+
+        await communicationsInterface.connectionInitiated;
+      } catch (e) {
+        setConnection({
+          state: ConnectionStatus.Error,
+          error: (e instanceof Error) ? e : new Error('unknown error'),
+        });
+
+        return;
+      }
     } else {
       setConnection({
         state: ConnectionStatus.Error,
@@ -163,6 +213,8 @@ export function App() {
 
       return;
     }
+
+    setConnection({ state: ConnectionStatus.DeviceConnecting });
 
     const device = new Device(communicationsInterface);
 
@@ -185,20 +237,22 @@ export function App() {
     window.device = device;
 
     setConnection({
-      state: ConnectionStatus.Connected,
+      state: ConnectionStatus.DeviceConnected,
       communicationsInterface,
       device,
     });
   };
 
   const disconnect = async () => {
-    if (connection.state !== ConnectionStatus.Connected) {
+    if (connection.state !== ConnectionStatus.InterfaceConnected && connection.state !== ConnectionStatus.DeviceConnected) {
       return;
     }
 
     setConnection({ state: ConnectionStatus.Disconnecting });
 
-    await connection.device.watchVariables(false);
+    if (connection.state === ConnectionStatus.DeviceConnected) {
+      await connection.device.watchVariables(false);
+    }
 
     if ('close' in connection.communicationsInterface) {
       await connection.communicationsInterface.close();
@@ -208,7 +262,9 @@ export function App() {
   };
 
   const [mockDeviceDialogOpen, setMockDeviceDialogOpen] = useState(false);
-  const usingMockDevice = connection.state === ConnectionStatus.Connected && 'getVariableValues' in connection.communicationsInterface;
+  const usingMockDevice = connection.state === ConnectionStatus.DeviceConnected && 'getVariableValues' in connection.communicationsInterface;
+
+  const usingBridgeDevice = (connection.state === ConnectionStatus.InterfaceConnected || connection.state === ConnectionStatus.DeviceConnected) && 'beginScanning' in connection.communicationsInterface;
 
   return (
     <div className="container">
@@ -216,12 +272,12 @@ export function App() {
         <Icon icon="offline" size={32} color="#ff3366" style={{ marginRight: 10 }} />
         Scream Everyware</H2>
       <Card elevation={Elevation.ONE} className="cell">
-        Connection State: {ConnectionStatus[connection.state]}
+        Connection State: {ConnectionStatus[connection.state].replace(/([a-z])([A-Z])/g, (_, a, b) => `${a} ${b}`)}
         <ControlGroup className="connection-buttons">
-          <Button onClick={connect} disabled={connection.state !== ConnectionStatus.Disconnected || connectionMode === undefined}>Connect</Button>
-          <Button onClick={disconnect} disabled={connection.state !== ConnectionStatus.Connected}>Disconnect</Button>
+          <Button onClick={connect} disabled={connection.state !== ConnectionStatus.Disconnected || connectionMode === undefined} loading={connection.state === ConnectionStatus.InterfaceConnecting || connection.state === ConnectionStatus.DeviceConnecting}>Connect</Button>
+          <Button onClick={disconnect} disabled={connection.state !== ConnectionStatus.InterfaceConnected && connection.state !== ConnectionStatus.DeviceConnected} loading={connection.state === ConnectionStatus.Disconnecting}>Disconnect</Button>
+          <Expander />
           {usingMockDevice && <>
-            <Expander />
             <Button icon="cog" onClick={() => setMockDeviceDialogOpen(true)} />
             <Drawer isOpen={mockDeviceDialogOpen} onClose={() => setMockDeviceDialogOpen(false)} size={DrawerSize.SMALL} title="Mock Device State">
               <div className={Classes.DRAWER_BODY}>
@@ -231,9 +287,12 @@ export function App() {
               </div>
             </Drawer>
           </>}
+          {usingBridgeDevice && <>
+              <BridgeBattery bridge={connection.communicationsInterface} />
+          </>}
         </ControlGroup>
       </Card>
-      {connection.state === ConnectionStatus.Error && <Callout intent={Intent.DANGER} icon={null}>
+      {connection.state === ConnectionStatus.Error && <Callout intent={Intent.DANGER} icon={null} className={Classes.ELEVATION_1}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <Icon intent={Intent.DANGER} size={20} icon="error" style={{ marginRight: 10 }} />
           <span>{connection.error.message}</span>
@@ -247,15 +306,16 @@ export function App() {
         <RadioGroup label="Connect Using" onChange={ev => setConnectionMode(+ev.currentTarget.value)} selectedValue={connectionMode}>
           {enabledConnectionModes.has(ConnectionMode.Mock) && <Radio value={ConnectionMode.Mock} label="Mock Device" />}
           {enabledConnectionModes.has(ConnectionMode.Serial) && <Radio value={ConnectionMode.Serial} label="Bluetooth Serial" />}
-          {enabledConnectionModes.has(ConnectionMode.Ble) && <Radio value={ConnectionMode.Ble} label="X1 Bridge (Bluetooth)" />}
-          {enabledConnectionModes.has(ConnectionMode.WebSocket) && <Radio value={ConnectionMode.WebSocket} label="X1 Bridge (WebSocket)" />}
+          {enabledConnectionModes.has(ConnectionMode.Ble) && <Radio value={ConnectionMode.Ble} label="X1 Bridge (via Bluetooth)" />}
+          {enabledConnectionModes.has(ConnectionMode.WebSocket) && <Radio value={ConnectionMode.WebSocket} label="X1 Bridge (via Wi-Fi)" />}
         </RadioGroup>
       </Card>}
       {connection.state === ConnectionStatus.Disconnected && <div className="cell">
-          <ConnectionModeHelpCallout mode={connectionMode} />
+          <ConnectionModeHelpCallout mode={connectionMode} className={Classes.ELEVATION_1} />
       </div>}
       <ErrorBoundary>
-        {connection.state === ConnectionStatus.Connected && <DeviceStatus device={connection.device} />}
+        {usingBridgeDevice && connection.state === ConnectionStatus.InterfaceConnected && <BridgeSettings bridge={connection.communicationsInterface} />}
+        {connection.state === ConnectionStatus.DeviceConnected && <DeviceStatus device={connection.device} />}
       </ErrorBoundary>
       <Expander />
       <div className={`footer cell ${Classes.TEXT_SMALL} ${Classes.TEXT_MUTED}`}>
