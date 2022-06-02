@@ -7,7 +7,8 @@ import {
 } from './WebBluetoothCommunicationsInterface';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Alignment,
+  Alert,
+  Alignment,
   Button,
   Card,
   Classes,
@@ -20,7 +21,8 @@ import {
   InputGroup,
   Intent,
   Menu,
-  MenuItem, Switch,
+  MenuItem,
+  Switch,
   Tab,
   TabId,
   Tabs,
@@ -77,6 +79,8 @@ function SignalStrengthIcon({ rssi }: { rssi: number }) {
 
 interface DevicesPanelProps {
   bridge: WebBluetoothCommunicationsInterface;
+  connecting: boolean | { attempt: number, attempts: number };
+  setConnecting: React.Dispatch<React.SetStateAction<boolean | { attempt: number, attempts: number }>>;
   setScanState: React.Dispatch<React.SetStateAction<ScanState>>;
   showAllResults: boolean;
   setHasHiddenResults: React.Dispatch<React.SetStateAction<boolean>>;
@@ -84,21 +88,39 @@ interface DevicesPanelProps {
   setPairedDevice: React.Dispatch<React.SetStateAction<PairedDevice | null>>;
 }
 
-function DevicesPanel({ bridge, setScanState, showAllResults, setHasHiddenResults, pairedDevice, setPairedDevice }: DevicesPanelProps) {
+function DevicesPanel({ bridge, connecting, setConnecting, setScanState, showAllResults, setHasHiddenResults, pairedDevice, setPairedDevice }: DevicesPanelProps) {
   const [scanResults, setScanResults] = useState<BtScanResult[]>([]);
+
+  const connect = useCallback(() => {
+    setConnecting(true);
+
+    bridge.connect();
+  }, [bridge, setConnecting]);
 
   const onScanChanged = useCallback(() => {
     setScanState(bridge.scanning);
     setScanResults(bridge.scanResults);
   }, [bridge, setScanState]);
 
+  const onConnectionAttempt = useCallback((ev: CustomEvent<{ attempt: number, attempts: number }>) => {
+    setConnecting(ev.detail);
+  }, [setConnecting]);
+
+  const onConnectionFailed = useCallback(() => {
+    setConnecting(false);
+  }, [setConnecting]);
+
   useEffect(() => {
     bridge.addEventListener('bt-scan-changed', onScanChanged);
+    bridge.addEventListener('bt-connecting', onConnectionAttempt);
+    bridge.addEventListener('bt-connection-failed', onConnectionFailed);
 
     return () => {
       bridge.removeEventListener('bt-scan-changed', onScanChanged);
+      bridge.removeEventListener('bt-connecting', onConnectionAttempt);
+      bridge.removeEventListener('bt-connection-failed', onConnectionFailed);
     };
-  }, [bridge, onScanChanged]);
+  }, [bridge, onConnectionAttempt, onConnectionFailed, onScanChanged]);
 
   const initialPairedDevice = useMemo(() => bridge.pairedDevice, [bridge])
 
@@ -148,6 +170,7 @@ function DevicesPanel({ bridge, setScanState, showAllResults, setHasHiddenResult
       <Menu className={`${Classes.ELEVATION_1} bridge-device-menu`}>
       {displayScanResults.length > 0 ? displayScanResults.map(r => <MenuItem
         key={r.address}
+        disabled={connecting !== false}
         selected={r.address === pairedDevice?.address}
         icon={(r.address === pairedDevice?.address) ? 'selection' : 'circle'}
         text={r.name}
@@ -166,7 +189,8 @@ function DevicesPanel({ bridge, setScanState, showAllResults, setHasHiddenResult
         Use the <Icon icon="refresh" style={{ paddingLeft: 3, paddingRight: 3 }} /> button to scan for devices.
       </div>}
     </Menu>
-    <Button disabled={pairedDevice === null} fill={true} intent={Intent.PRIMARY} onClick={() => bridge.connect()}>Connect</Button>
+    <Button disabled={connecting !== false || pairedDevice === null} loading={connecting !== false} fill={true} intent={Intent.PRIMARY} onClick={connect}>Connect</Button>
+    { typeof connecting === 'object' && <div className={`${Classes.TEXT_MUTED} ${Classes.TEXT_SMALL}`} style={{ textAlign: 'center', marginTop: 15 }}>Connection attempt {connecting.attempt} of {connecting.attempts}</div>}
   </div>;
 }
 
@@ -212,6 +236,7 @@ function SettingsPanel({ bridge }: { bridge: WebBluetoothCommunicationsInterface
 
 export function BridgeSettings({ bridge }: { bridge: WebBluetoothCommunicationsInterface }) {
   const [selectedTab, setSelectedTab] = useState<TabId>('devices');
+  const [connecting, setConnecting] = useState<boolean | { attempt: number, attempts: number }>(false);
   const [scanState, setScanState] = useState<ScanState>(bridge.scanning);
   const [showAllResults, setShowAllResults] = useState<boolean>(false);
   const [hasHiddenResults, setHasHiddenResults] = useState<boolean>(false);
@@ -220,12 +245,12 @@ export function BridgeSettings({ bridge }: { bridge: WebBluetoothCommunicationsI
   return <>
     <div className="cell">
       <Tabs selectedTabId={selectedTab} onChange={newTab => setSelectedTab(newTab)}>
-        <Tab id="devices" title="Connect X1" panel={<DevicesPanel bridge={bridge} setScanState={setScanState} showAllResults={showAllResults} setHasHiddenResults={setHasHiddenResults} pairedDevice={pairedDevice} setPairedDevice={setPairedDevice} />} />
-        <Tab id="settings" title="Settings" panel={<SettingsPanel bridge={bridge} />} />
+        <Tab id="devices" title="Connect X1" disabled={connecting !== false} panel={<DevicesPanel bridge={bridge} connecting={connecting} setConnecting={setConnecting} setScanState={setScanState} showAllResults={showAllResults} setHasHiddenResults={setHasHiddenResults} pairedDevice={pairedDevice} setPairedDevice={setPairedDevice} />} />
+        <Tab id="settings" title="Settings" disabled={connecting !== false} panel={<SettingsPanel bridge={bridge} />} />
         <Expander />
         <ControlGroup style={{ alignItems: 'center' }}>
-          <Switch checked={showAllResults} onChange={ev => setShowAllResults(ev.currentTarget.checked)} disabled={selectedTab !== 'devices' || !hasHiddenResults} inline={true} alignIndicator={Alignment.RIGHT} style={{ marginBottom: 0, marginRight: 20 }}>Show All</Switch>
-          <Button disabled={selectedTab !== 'devices' || scanState !== ScanState.NotScanning} loading={scanState === ScanState.Scanning} onClick={() => bridge.beginScanning()} minimal={false} icon="refresh" />
+          <Switch checked={showAllResults} onChange={ev => setShowAllResults(ev.currentTarget.checked)} disabled={connecting !== false || selectedTab !== 'devices' || !hasHiddenResults} inline={true} alignIndicator={Alignment.RIGHT} style={{ marginBottom: 0, marginRight: 20 }}>Show All</Switch>
+          <Button disabled={connecting !== false || selectedTab !== 'devices' || scanState !== ScanState.NotScanning} loading={scanState === ScanState.Scanning} onClick={() => bridge.beginScanning()} minimal={false} icon="refresh" title={scanState === ScanState.ScanningDisabled ? 'Restart bridge to enable scanning.' : undefined} />
         </ControlGroup>
       </Tabs>
     </div>

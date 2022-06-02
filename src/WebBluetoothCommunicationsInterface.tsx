@@ -48,8 +48,13 @@ export interface BtScanResult {
 }
 
 interface WebBluetoothCommunicationsInterfaceEventMap {
+  'disconnected': CustomEvent<undefined>,
   'battery-level-changed': CustomEvent<undefined>,
   'bt-scan-changed': CustomEvent<undefined>;
+  'bt-connected': CustomEvent<undefined>;
+  'bt-connecting': CustomEvent<{ attempt: number, attempts: number }>;
+  'bt-connection-failed': CustomEvent<undefined>;
+  'bt-disconnected': CustomEvent<undefined>;
 }
 
 export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBluetoothCommunicationsInterfaceEventMap> implements CommunicationsInterface {
@@ -146,9 +151,9 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     })();
   }
 
-  private connectionInitiated_: Deferred<void> = new Deferred();
-  public get connectionInitiated(): Promise<void> {
-    return this.connectionInitiated_.promise;
+  private connected_: boolean = false;
+  public get connected(): boolean {
+    return this.connected_;
   }
 
   async open(device: BluetoothDevice): Promise<void> {
@@ -159,6 +164,10 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     if (!device.gatt) {
       throw new Error('Bluetooth device missing GATT support');
     }
+
+    device.addEventListener('gattserverdisconnected', () => {
+      this.dispatchCustomEvent('disconnected');
+    });
 
     this.server = await device.gatt.connect();
 
@@ -267,17 +276,43 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
 
     this.btConnectCharacteristic.addEventListener('characteristicvaluechanged', async () => {
       const value = this.btConnectCharacteristic?.value;
-
-      // TODO: Handle connecting timing out and sudden disconnections.
-      if (value && value.byteLength >= 1 && value.getUint8(0) === 0x01) {
-        this.connectionInitiated_.resolve();
+      if (!value || value.byteLength < 3) {
+        return;
       }
+
+      if (value.getUint8(0) === 1) {
+        this.connected_ = true;
+        this.dispatchCustomEvent('bt-connected');
+        return;
+      }
+
+      if (value.getUint8(0) !== 0) {
+        return;
+      }
+
+      if (this.connected_) {
+        this.connected_ = false;
+        this.dispatchCustomEvent('bt-disconnected');
+        return;
+      }
+
+      const attempt = value.getUint8(1);
+      const attempts = value.getUint8(2);
+
+      if (attempts > 0) {
+        this.dispatchCustomEvent('bt-connecting', { attempt, attempts });
+        return;
+      }
+
+      this.dispatchCustomEvent('bt-connection-failed');
     });
 
     await this.btConnectCharacteristic.startNotifications();
 
-    // TODO: Handle the bridge already being connected.
-    // this.connected_ = (await this.btConnectCharacteristic.readValue()).getUint8(0);
+    this.connected_ = (await this.btConnectCharacteristic.readValue()).getUint8(0) === 1;
+    if (this.connected_) {
+      this.dispatchCustomEvent('bt-connected');
+    }
 
     this.pairedDeviceConfigCharacteristic = await this.service.getCharacteristic(uuids.config_bt_addr);
 
@@ -303,9 +338,6 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     if (this.server === null) {
       throw new Error('WebBluetoothCommunicationsInterface not open');
     }
-
-    // TODO: Rest of the cleanup.
-    this.connectionInitiated_.reject(new Error('WebBluetoothCommunicationsInterface closed'));
 
     this.server.disconnect();
     this.server = null;
@@ -378,6 +410,8 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
 
     // TODO: Check the current state.
     await this.btConnectCharacteristic.writeValue(new Uint8Array([0x01]));
+
+    // TODO: Return a promise that resolves / rejects.
   }
 
   async sleep(): Promise<void> {

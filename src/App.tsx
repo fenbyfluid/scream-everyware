@@ -183,6 +183,18 @@ export function App() {
       try {
         communicationsInterface = new WebBluetoothCommunicationsInterface();
 
+        // TODO: This is a hack.
+        const ble = communicationsInterface;
+        const bridgeConnected = new Promise<void>((resolve, reject) => {
+          ble.addEventListener('bt-connected', () => {
+            resolve();
+          });
+
+          ble.addEventListener('disconnected', () => {
+            reject(new Error('Bridge Disconnected'));
+          });
+        });
+
         const device = await navigator.bluetooth.requestDevice(RequestDeviceOptions);
 
         // TODO: Handle the device disconnecting unexpectedly.
@@ -196,7 +208,7 @@ export function App() {
           communicationsInterface,
         });
 
-        await communicationsInterface.connectionInitiated;
+        await bridgeConnected;
       } catch (e) {
         setConnection({
           state: ConnectionStatus.Error,

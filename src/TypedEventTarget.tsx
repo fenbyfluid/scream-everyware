@@ -16,7 +16,7 @@ export class TypedEventTarget<EventMap extends { [key in keyof EventMap]: Event 
   public dispatchCustomEvent<K extends string & CustomEventKeyOf<EventMap, undefined>>(type: K): boolean
   public dispatchCustomEvent<K extends string & CustomEventKeyOf<EventMap, T>, T, E extends EventMap[K] & CustomEvent<T>>(type: K, detail: E['detail']): boolean
   public dispatchCustomEvent<K extends string & CustomEventKeyOf<EventMap, T>, T, E extends EventMap[K] & CustomEvent<T>>(type: K, detail?: E['detail']): boolean {
-    return super.dispatchEvent(new CustomEvent(type, detail));
+    return super.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
   public dispatchEvent<K extends keyof EventMap>(e: EventMap[K]): boolean {
