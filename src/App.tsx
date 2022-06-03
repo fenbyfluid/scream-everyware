@@ -169,7 +169,14 @@ export function App() {
 
         const port = await navigator.serial.requestPort();
 
-        // TODO: Handle the port being closed unexpectedly.
+        communicationsInterface.addEventListener('disconnected', () => {
+          // TODO: Do we need to check the current state?
+          setConnection({
+            state: ConnectionStatus.Error,
+            error: new Error('Device Disconnected'),
+          });
+        });
+
         await communicationsInterface.open(port);
       } catch (e) {
         setConnection({
