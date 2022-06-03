@@ -152,87 +152,7 @@ export function App() {
     };
   }, []);
 
-  const connect = async () => {
-    if (connection.state !== ConnectionStatus.Disconnected || connectionMode === undefined) {
-      return;
-    }
-
-    setConnection({ state: ConnectionStatus.InterfaceConnecting });
-
-    let communicationsInterface: SupportedCommunicationsInterfaces;
-
-    if (connectionMode === ConnectionMode.Mock) {
-      communicationsInterface = new MockDevice();
-    } else if (connectionMode === ConnectionMode.Serial) {
-      try {
-        communicationsInterface = new WebSerialCommunicationsInterface();
-
-        const port = await navigator.serial.requestPort();
-
-        communicationsInterface.addEventListener('disconnected', () => {
-          // TODO: Do we need to check the current state?
-          setConnection({
-            state: ConnectionStatus.Error,
-            error: new Error('Device Disconnected'),
-          });
-        });
-
-        await communicationsInterface.open(port);
-      } catch (e) {
-        setConnection({
-          state: ConnectionStatus.Error,
-          error: (e instanceof Error) ? e : new Error('unknown error'),
-        });
-
-        return;
-      }
-    } else if (connectionMode === ConnectionMode.Ble) {
-      try {
-        communicationsInterface = new WebBluetoothCommunicationsInterface();
-
-        // TODO: This is a hack.
-        const ble = communicationsInterface;
-        const bridgeConnected = new Promise<void>((resolve, reject) => {
-          ble.addEventListener('bt-connected', () => {
-            resolve();
-          });
-
-          ble.addEventListener('disconnected', () => {
-            reject(new Error('Bridge Disconnected'));
-          });
-        });
-
-        const device = await navigator.bluetooth.requestDevice(RequestDeviceOptions);
-
-        // TODO: Handle the device disconnecting unexpectedly.
-        await communicationsInterface.open(device);
-
-        // @ts-ignore
-        window.communicationsInterface = communicationsInterface;
-
-        setConnection({
-          state: ConnectionStatus.InterfaceConnected,
-          communicationsInterface,
-        });
-
-        await bridgeConnected;
-      } catch (e) {
-        setConnection({
-          state: ConnectionStatus.Error,
-          error: (e instanceof Error) ? e : new Error('unknown error'),
-        });
-
-        return;
-      }
-    } else {
-      setConnection({
-        state: ConnectionStatus.Error,
-        error: new Error(`Connection mode ${ConnectionMode[connectionMode]} not implemented`),
-      });
-
-      return;
-    }
-
+  const connectDevice = async (communicationsInterface: SupportedCommunicationsInterfaces) => {
     setConnection({ state: ConnectionStatus.DeviceConnecting });
 
     const device = new Device(communicationsInterface);
@@ -253,6 +173,9 @@ export function App() {
     await device.watchVariables(true);
 
     // @ts-ignore
+    window.communicationsInterface = communicationsInterface;
+
+    // @ts-ignore
     window.device = device;
 
     setConnection({
@@ -260,6 +183,102 @@ export function App() {
       communicationsInterface,
       device,
     });
+  };
+
+  const connect = async () => {
+    if (connection.state !== ConnectionStatus.Disconnected || connectionMode === undefined) {
+      return;
+    }
+
+    setConnection({ state: ConnectionStatus.InterfaceConnecting });
+
+    switch (connectionMode) {
+      case ConnectionMode.Mock:
+        const communicationsInterface = new MockDevice();
+
+        await connectDevice(communicationsInterface);
+
+        break;
+      case ConnectionMode.Serial:
+        try {
+          const communicationsInterface = new WebSerialCommunicationsInterface();
+
+          const port = await navigator.serial.requestPort();
+
+          communicationsInterface.addEventListener('disconnected', () => {
+            // TODO: Do we need to check the current state?
+            setConnection({
+              state: ConnectionStatus.Error,
+              error: new Error('Device Disconnected'),
+            });
+          });
+
+          await communicationsInterface.open(port);
+
+          await connectDevice(communicationsInterface);
+        } catch (e) {
+          setConnection({
+            state: ConnectionStatus.Error,
+            error: (e instanceof Error) ? e : new Error('Unknown Error'),
+          });
+        }
+
+        break;
+      case ConnectionMode.Ble:
+        try {
+          const communicationsInterface = new WebBluetoothCommunicationsInterface();
+
+          communicationsInterface.addEventListener('bt-connected', () => {
+            connectDevice(communicationsInterface);
+          });
+
+          // TODO: Is this sane?
+          communicationsInterface.addEventListener('bt-disconnected', () => {
+            setConnection(connection => {
+              if (connection.state !== ConnectionStatus.DeviceConnected) {
+                return connection;
+              }
+
+              return {
+                state: ConnectionStatus.InterfaceConnected,
+                communicationsInterface: connection.communicationsInterface,
+              };
+            });
+          });
+
+          communicationsInterface.addEventListener('disconnected', () => {
+            // TODO: Do we need to check the current state?
+            setConnection({
+              state: ConnectionStatus.Error,
+              error: new Error('Bridge Disconnected'),
+            });
+          });
+
+          const device = await navigator.bluetooth.requestDevice(RequestDeviceOptions);
+
+          await communicationsInterface.open(device);
+
+          // @ts-ignore
+          window.communicationsInterface = communicationsInterface;
+
+          setConnection({
+            state: ConnectionStatus.InterfaceConnected,
+            communicationsInterface,
+          });
+        } catch (e) {
+          setConnection({
+            state: ConnectionStatus.Error,
+            error: (e instanceof Error) ? e : new Error('Unknown Error'),
+          });
+        }
+
+        break;
+      default:
+        setConnection({
+          state: ConnectionStatus.Error,
+          error: new Error(`Connection mode ${ConnectionMode[connectionMode]} not implemented`),
+        });
+    }
   };
 
   const disconnect = async () => {

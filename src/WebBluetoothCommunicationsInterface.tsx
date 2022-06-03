@@ -48,8 +48,8 @@ export interface BtScanResult {
 }
 
 interface WebBluetoothCommunicationsInterfaceEventMap {
-  'disconnected': CustomEvent<undefined>,
-  'battery-level-changed': CustomEvent<undefined>,
+  'disconnected': CustomEvent<undefined>;
+  'battery-level-changed': CustomEvent<undefined>;
   'bt-scan-changed': CustomEvent<undefined>;
   'bt-connected': CustomEvent<undefined>;
   'bt-connecting': CustomEvent<{ attempt: number, attempts: number }>;
@@ -309,11 +309,6 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
 
     await this.btConnectCharacteristic.startNotifications();
 
-    this.connected_ = (await this.btConnectCharacteristic.readValue()).getUint8(0) === 1;
-    if (this.connected_) {
-      this.dispatchCustomEvent('bt-connected');
-    }
-
     this.pairedDeviceConfigCharacteristic = await this.service.getCharacteristic(uuids.config_bt_addr);
 
     const pairedDeviceValue = await this.pairedDeviceConfigCharacteristic.readValue();
@@ -332,11 +327,23 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     }
 
     this.serialDataCharacteristic = await this.service.getCharacteristic(uuids.serial_data);
+
+    // Must be done last.
+    this.connected_ = (await this.btConnectCharacteristic.readValue()).getUint8(0) === 1;
+    if (this.connected_) {
+      this.dispatchCustomEvent('bt-connected');
+    }
   }
 
   async close(): Promise<void> {
     if (this.server === null) {
       throw new Error('WebBluetoothCommunicationsInterface not open');
+    }
+
+    // TODO: Is this what we want to do? Does more need to be done?
+    //       Or do we want to leave the Bridge <-> X1 connection active?
+    if (this.connected_ && this.btConnectCharacteristic) {
+      await this.btConnectCharacteristic.writeValue(new Uint8Array([0]));
     }
 
     this.server.disconnect();
