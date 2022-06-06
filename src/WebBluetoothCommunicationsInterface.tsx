@@ -17,6 +17,7 @@ const uuids = {
   restart: '00002008-7858-48fb-b797-8613e960da6a',
   sleep: '0000200c-7858-48fb-b797-8613e960da6a',
   ota_update: '00002009-7858-48fb-b797-8613e960da6a',
+  mtu_info: '0000200d-7858-48fb-b797-8613e960da6a',
 };
 
 export const RequestDeviceOptions = {
@@ -64,6 +65,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
   private btConnectCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   private pairedDeviceConfigCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   private serialDataCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private otaUpdateCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
 
   private batteryLevel_: number = 100;
   public get batteryLevel(): number {
@@ -102,7 +104,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
       const textEncoder = new TextEncoder();
       const value = textEncoder.encode(name);
 
-      await characteristic.writeValue(value);
+      await characteristic.writeValueWithoutResponse(value);
     })();
   }
 
@@ -113,7 +115,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
       const value = new DataView(new ArrayBuffer(Uint32Array.BYTES_PER_ELEMENT));
       value.setUint32(0, pinCode, true);
 
-      await characteristic.writeValue(value);
+      await characteristic.writeValueWithoutResponse(value);
     })();
   }
 
@@ -130,7 +132,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
       const value = new DataView(new ArrayBuffer(Uint32Array.BYTES_PER_ELEMENT));
       value.setUint32(0, connectedIdleTimeout, true);
 
-      await characteristic.writeValue(value);
+      await characteristic.writeValueWithoutResponse(value);
     })();
   }
 
@@ -147,13 +149,22 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
       const value = new DataView(new ArrayBuffer(Uint32Array.BYTES_PER_ELEMENT));
       value.setUint32(0, disconnectedIdleTimeout, true);
 
-      await characteristic.writeValue(value);
+      await characteristic.writeValueWithoutResponse(value);
     })();
   }
 
   private connected_: boolean = false;
   public get connected(): boolean {
     return this.connected_;
+  }
+
+  private mtu_: number = 23;
+  public get mtu(): number {
+    return this.mtu_;
+  }
+
+  public get supportsOta(): boolean {
+    return this.otaUpdateCharacteristic !== null;
   }
 
   async open(device: BluetoothDevice): Promise<void> {
@@ -226,6 +237,13 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
       const value = await characteristic.readValue();
 
       this.disconnectedIdleTimeout_ = value.getUint32(0, true);
+    }
+
+    {
+      const characteristic = await this.service!.getCharacteristic(uuids.mtu_info);
+      const value = await characteristic.readValue();
+
+      this.mtu_ = value.getUint16(0, true);
     }
 
     this.btScanCharacteristic = await this.service.getCharacteristic(uuids.bluetooth_scan);
@@ -328,6 +346,12 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
 
     this.serialDataCharacteristic = await this.service.getCharacteristic(uuids.serial_data);
 
+    try {
+      this.otaUpdateCharacteristic = await this.service.getCharacteristic(uuids.ota_update);
+    } catch (e) {
+      this.otaUpdateCharacteristic = null;
+    }
+
     // Must be done last.
     this.connected_ = (await this.btConnectCharacteristic.readValue()).getUint8(0) === 1;
     if (this.connected_) {
@@ -343,7 +367,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     // TODO: Is this what we want to do? Does more need to be done?
     //       Or do we want to leave the Bridge <-> X1 connection active?
     if (this.connected_ && this.btConnectCharacteristic) {
-      await this.btConnectCharacteristic.writeValue(new Uint8Array([0]));
+      await this.btConnectCharacteristic.writeValueWithoutResponse(new Uint8Array([0]));
     }
 
     this.server.disconnect();
@@ -356,7 +380,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     }
 
     this.scanResults_.clear();
-    await this.btScanCharacteristic.writeValue(new Uint8Array([0x01]));
+    await this.btScanCharacteristic.writeValueWithoutResponse(new Uint8Array([0x01]));
 
     this.scanning_ = (await this.btScanCharacteristic.readValue()).getUint8(0);
     this.dispatchCustomEvent('bt-scan-changed');
@@ -372,7 +396,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     }
 
     // The notification will update our state variables.
-    await this.btScanCharacteristic.writeValue(new Uint8Array([0x00]));
+    await this.btScanCharacteristic.writeValueWithoutResponse(new Uint8Array([0x00]));
   }
 
   async setPairedDevice(device: PairedDevice | null): Promise<void> {
@@ -381,7 +405,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     }
 
     if (!device) {
-      await this.pairedDeviceConfigCharacteristic.writeValue(new ArrayBuffer(0));
+      await this.pairedDeviceConfigCharacteristic.writeValueWithoutResponse(new ArrayBuffer(0));
 
       this.pairedDeviceAddress_ = null;
       this.pairedDeviceName_ = null;
@@ -404,7 +428,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
       value[i + address.length] = name[i];
     }
 
-    await this.pairedDeviceConfigCharacteristic.writeValue(value);
+    await this.pairedDeviceConfigCharacteristic.writeValueWithoutResponse(value);
 
     this.pairedDeviceAddress_ = device.address;
     this.pairedDeviceName_ = device.name;
@@ -416,7 +440,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     }
 
     // TODO: Check the current state.
-    await this.btConnectCharacteristic.writeValue(new Uint8Array([0x01]));
+    await this.btConnectCharacteristic.writeValueWithoutResponse(new Uint8Array([0x01]));
 
     // TODO: Return a promise that resolves / rejects.
   }
@@ -428,7 +452,7 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
 
     const characteristic = await this.service.getCharacteristic(uuids.sleep);
 
-    await characteristic.writeValue(new ArrayBuffer(0));
+    await characteristic.writeValueWithoutResponse(new ArrayBuffer(0));
   }
 
   async restart(resetConfig?: boolean): Promise<void> {
@@ -438,7 +462,103 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
 
     const characteristic = await this.service.getCharacteristic(uuids.restart);
 
-    await characteristic.writeValue(new Uint8Array([resetConfig ? 0x01 : 0x00]));
+    await characteristic.writeValueWithoutResponse(new Uint8Array([resetConfig ? 0x01 : 0x00]));
+  }
+
+  async getFirmwareSigningPublicKey(): Promise<CryptoKey> {
+    if (!this.otaUpdateCharacteristic) {
+      throw new Error('OTA update not supported');
+    }
+
+    const value = await this.otaUpdateCharacteristic.readValue();
+
+    const format = value.getUint8(0);
+    if (format !== 1) {
+      throw new Error('Unsupported OTA protocol');
+    }
+
+    return await window.crypto.subtle.importKey('raw', new Uint8Array(value.buffer, 1), {
+      name: 'ECDSA',
+      namedCurve: 'P-256',
+    }, true, [
+      'verify',
+    ]);
+  }
+
+  async updateFirmware(data: Uint8Array, signature: Uint8Array, onProgress: (percent: number) => void): Promise<void> {
+    if (!this.otaUpdateCharacteristic) {
+      throw new Error('OTA update not supported');
+    }
+
+    let aborted = false;
+    const deferred = new Deferred<void>();
+
+    this.otaUpdateCharacteristic.addEventListener('characteristicvaluechanged', () => {
+      const value = this.otaUpdateCharacteristic?.value;
+      if (!value) {
+        return;
+      }
+
+      const progress = value.getUint32(0, true);
+      const status = value.getUint8(4);
+
+      if (progress === 0xFFFFFFFF) {
+        if (status !== 0) {
+          deferred.resolve();
+        } else {
+          aborted = true;
+          deferred.reject();
+        }
+
+        return;
+      }
+
+      onProgress(progress / data.length);
+    });
+
+    await this.otaUpdateCharacteristic.startNotifications();
+
+    const initMessage = new DataView(new ArrayBuffer(6));
+    initMessage.setUint8(0, 1);
+    initMessage.setUint8(1, 1);
+    initMessage.setUint32(2, data.length, true);
+
+    await this.otaUpdateCharacteristic.writeValueWithoutResponse(initMessage);
+
+    // 3 bytes GATT overhead, 1 byte for our packet type header
+    const chunkSize = this.mtu - 3 - 1;
+
+    const chunkMessage = new Uint8Array(1 + chunkSize);
+    chunkMessage[0] = 2;
+
+    let unconfirmedWrites = 0;
+
+    for (let i = 0; i < data.length; i += chunkSize) {
+      if (aborted) {
+        break;
+      }
+
+      const slice = data.subarray(i, i + chunkSize);
+      chunkMessage.set(slice, 1);
+
+      if (unconfirmedWrites < 12) {
+        await this.otaUpdateCharacteristic.writeValueWithoutResponse(chunkMessage.subarray(0, 1 + slice.length));
+        unconfirmedWrites += 1;
+      } else {
+        await this.otaUpdateCharacteristic.writeValueWithResponse(chunkMessage.subarray(0, 1 + slice.length));
+        unconfirmedWrites = 0;
+      }
+    }
+
+    if (!aborted) {
+      const finishMessage = new Uint8Array(1 + signature.length);
+      finishMessage[0] = 3;
+      finishMessage.set(signature, 1);
+
+      await this.otaUpdateCharacteristic.writeValueWithoutResponse(finishMessage);
+    }
+
+    await deferred.promise;
   }
 
   async *receiveMessages(): AsyncGenerator<VariableUpdate | string, void, void> {
@@ -499,6 +619,6 @@ export class WebBluetoothCommunicationsInterface extends TypedEventTarget<WebBlu
     }
 
     const message = new Uint8Array([command, argument, 0x0A]);
-    await this.serialDataCharacteristic.writeValue(message);
+    await this.serialDataCharacteristic.writeValueWithoutResponse(message);
   }
 }

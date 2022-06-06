@@ -13,3 +13,8 @@
     padding: 10px;
     text-align: center;
 }
+
+.firmware-update-progress {
+    height: 16px;
+    margin-bottom: 10px;
+}

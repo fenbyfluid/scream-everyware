@@ -13,6 +13,7 @@ import {
   Card,
   Classes,
   ControlGroup,
+  Dialog,
   Elevation,
   Expander,
   FileInput,
@@ -22,6 +23,7 @@ import {
   Intent,
   Menu,
   MenuItem,
+  ProgressBar,
   Switch,
   Tab,
   TabId,
@@ -161,6 +163,8 @@ function DevicesPanel({ bridge, connecting, setConnecting, setScanState, showAll
 
     displayScanResults.sort((a, b) => a.name.localeCompare(b.name));
 
+    // TODO: This call is illegal - needs to be done from a useEffect hook?
+    //       Cannot update a component (`BridgeSettings`) while rendering a different component (`DevicesPanel`).
     setHasHiddenResults(hasHiddenResults);
 
     return displayScanResults;
@@ -194,6 +198,186 @@ function DevicesPanel({ bridge, connecting, setConnecting, setScanState, showAll
   </div>;
 }
 
+interface FirmwareInfo {
+  data: Uint8Array;
+  signature: Uint8Array | null;
+}
+
+function FirmwareUpdate({ id, bridge }: { id: string, bridge: WebBluetoothCommunicationsInterface }) {
+  const [updateProgress, setUpdateProgress] = useState<false | { done: true } | { done: false, progress: number }>(false);
+  const [firmwareFile, setFirmwareFile] = useState<File | null>(null);
+  const [firmwareInfo, setFirmwareInfo] = useState<FirmwareInfo | null>(null);
+  const [signingKeyHex, setSigningKeyHex] = useState<string>('');
+  const [signingKeyState, setSigningKeyState] = useState<'empty' | 'wrong-format' | 'wrong-key' | 'ok'>('empty');
+  const [outOfBandSignature, setOutOfBandSignature] = useState<Uint8Array | null>(null);
+  const canDismiss = updateProgress === false || updateProgress.done;
+
+  useEffect(() => {
+    setUpdateProgress(false);
+
+    if (firmwareFile === null) {
+      setFirmwareInfo(null);
+      return;
+    }
+
+    firmwareFile.arrayBuffer().then(buffer => {
+      const data = new Uint8Array(buffer);
+
+      // TODO: Handle signed images.
+      if (data[0] !== 0xE9) {
+        throw new Error('Not a firmware file');
+      }
+
+      setFirmwareInfo({
+        data,
+        signature: null,
+      });
+    }).catch(e => {
+      // TODO: Surface this.
+      console.log(e);
+    });
+  }, [firmwareFile]);
+
+  useEffect(() => {
+    if (firmwareInfo === null || firmwareInfo.signature !== null) {
+      setOutOfBandSignature(null);
+      return;
+    }
+
+    if (signingKeyHex.length === 0) {
+      setSigningKeyState('empty');
+      return;
+    }
+
+    if (signingKeyHex.match(/^[0-9a-f]{64}$/i) === null) {
+      setSigningKeyState('wrong-format');
+      return;
+    }
+
+    bridge.getFirmwareSigningPublicKey().then(publicKey => {
+      return window.crypto.subtle.exportKey('jwk', publicKey);
+    }).then(publicJwk => {
+      const signingKeyBase64Url = btoa(signingKeyHex.match(/../g)!
+        .map(n => Number.parseInt(n, 16))
+        .map(n => String.fromCharCode(n))
+        .join(''))
+        .replaceAll('+', '-')
+        .replaceAll('/', '_')
+        .replaceAll('=', '');
+
+      const privateJwk = {
+        ...publicJwk,
+        d: signingKeyBase64Url,
+        key_ops: [
+          'sign',
+        ],
+      };
+
+      return window.crypto.subtle.importKey('jwk', privateJwk, {
+        name: 'ECDSA',
+        namedCurve: 'P-256'
+      }, true,[
+        'sign',
+      ]).catch(e => {
+        console.log(e);
+        setSigningKeyState('wrong-key');
+        return null;
+      });
+    }).then(privateKey => {
+      if (!privateKey) {
+        return null;
+      }
+
+      setSigningKeyState('ok');
+
+      return window.crypto.subtle.sign({
+        'name': 'ECDSA',
+        'hash': 'SHA-256',
+      }, privateKey, firmwareInfo.data).then(signature => {
+        // Convert the signature from IEEE P1363 format to ASN.1 format.
+        const asn1 = new Uint8Array(signature.byteLength + 6);
+        asn1.set([0x30, signature.byteLength + 4, 0x02, signature.byteLength / 2], 0);
+        asn1.set(new Uint8Array(signature, 0, signature.byteLength / 2), 4);
+        asn1.set([0x02, signature.byteLength / 2], (signature.byteLength / 2) + 4);
+        asn1.set(new Uint8Array(signature, signature.byteLength / 2, signature.byteLength / 2), (signature.byteLength / 2) + 6);
+
+        setOutOfBandSignature(asn1);
+      });
+    });
+  }, [bridge, firmwareInfo, signingKeyHex]);
+
+  const doUpdate = async () => {
+    if (firmwareInfo === null) {
+      return;
+    }
+
+    const signature = outOfBandSignature ?? firmwareInfo.signature;
+    if (signature === null) {
+      return;
+    }
+
+    const startTime = Date.now();
+
+    setUpdateProgress({ done: false, progress: 0 });
+
+    await bridge.updateFirmware(firmwareInfo.data, signature, percent => {
+      setUpdateProgress({ done: false, progress: percent });
+    });
+
+    setUpdateProgress({ done: true });
+
+    console.log('duration', (Date.now() - startTime) / 1000);
+  };
+
+  return <>
+    <FileInput fill={true} id={id} hasSelection={firmwareFile !== null} onInputChange={ev => {
+      const files = ev.currentTarget.files;
+      if (files && files.length > 0) {
+        setFirmwareFile(files.item(0));
+      } else {
+        setFirmwareFile(null);
+      }
+    }} text={firmwareFile !== null ? firmwareFile.name : undefined} />
+    <Dialog canEscapeKeyClose={canDismiss} canOutsideClickClose={canDismiss} isCloseButtonShown={canDismiss} isOpen={firmwareFile !== null} title="Firmware Update">
+      <div className={Classes.DIALOG_BODY}>
+        {firmwareInfo === null ? <p>
+          Reading firmware file ...
+        </p> : <p>
+          The firmware update will take approximately {(firmwareInfo.data.length / bridge.mtu / 40).toFixed(0)} seconds.
+        </p>}
+        {firmwareInfo !== null && firmwareInfo.signature === null && <>
+            <FormGroup
+                label="Enter the private key to sign the firmware."
+                labelFor="signingKey"
+                intent={{
+                  'empty': undefined,
+                  'wrong-format': Intent.WARNING,
+                  'wrong-key': Intent.DANGER,
+                  'ok': Intent.SUCCESS,
+                }[signingKeyState]}
+                helperText={{
+                  'empty': undefined,
+                  'wrong-format': 'Private key should be 64 hexadecimal characters.',
+                  'wrong-key': 'Private key does not match installed firmware.',
+                  'ok': 'Private key matches the installed firmware.',
+                }[signingKeyState]}
+            >
+                <InputGroup id="signingKey" value={signingKeyHex} onChange={ev => setSigningKeyHex(ev.currentTarget.value)} />
+            </FormGroup>
+        </>}
+        <ProgressBar intent={Intent.PRIMARY} className="firmware-update-progress" value={updateProgress !== false ? (!updateProgress.done ? updateProgress.progress : 1) : 0} animate={updateProgress !== false && !updateProgress.done} />
+        The bridge will disconnect and restart when the update is complete.
+      </div>
+      <div className={Classes.DIALOG_FOOTER}>
+        <div className={Classes.DIALOG_FOOTER_ACTIONS}>
+          <Button disabled={!canDismiss} onClick={() => setFirmwareFile(null)}>Cancel</Button>
+          <Button intent={Intent.DANGER} disabled={firmwareInfo === null || updateProgress !== false || (outOfBandSignature || firmwareInfo.signature) === null} loading={updateProgress !== false} onClick={() => doUpdate()}>Begin Update</Button>
+        </div>
+      </div>
+    </Dialog>
+  </>;
+}
+
 function SettingsPanel({ bridge }: { bridge: WebBluetoothCommunicationsInterface }) {
   const [resetConfigAlertOpen, setResetConfigAlertOpen] = useState<boolean>(false);
 
@@ -210,8 +394,8 @@ function SettingsPanel({ bridge }: { bridge: WebBluetoothCommunicationsInterface
     <FormGroup label="Disconnected Idle Timeout" helperText="If no clients are connected for this long, go to sleep." labelFor="bridgeConfigDisconnectedIdle">
       <InputGroup id="bridgeConfigDisconnectedIdle" defaultValue={bridge.disconnectedIdleTimeout.toString()} onBlur={ev => bridge.disconnectedIdleTimeout = +ev.currentTarget.value} />
     </FormGroup>
-    {<FormGroup label="Update Firmware" helperText="Upload new firmware to the bridge." labelFor="bridgeFirmware">
-      <FileInput fill={true} id="bridgeFirmware" />
+    {bridge.supportsOta && <FormGroup label="Update Firmware" helperText="Upload new firmware to the bridge." labelFor="bridgeFirmware">
+      <FirmwareUpdate id="bridgeFirmware" bridge={bridge} />
     </FormGroup>}
     <ControlGroup style={{ justifyContent: 'flex-end' }}>
       <Button onClick={() => bridge.sleep()}>Sleep</Button>
